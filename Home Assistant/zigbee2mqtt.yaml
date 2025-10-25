@@ -1,0 +1,27 @@
+# Adapter settings
+serial:
+  port: /dev/ttyACM0
+
+# MQTT
+mqtt:
+  base_topic: zigbee2mqtt
+  server: home
+  user: chumaweb
+  password: 123qweasdzxc
+  client_id: zigbee
+
+# Zigbee network
+permit_join: false # Do not allow random devices to connect automatically
+
+# Webserver
+frontend:
+  port: 8099 # Custom port
+  url: 'http://192.168.0.18:8099' # Update IP here
+
+# Devices and groups
+# Extract config to separate files
+devices: devices.yaml
+groups: groups.yaml
+
+# Home Assistant integration
+homeassistant: true

@@ -1,0 +1,8 @@
+#Wifi сеть
+sudo nmtui
+
+#Реквизиты для привязки Home Assistant к навыку Yaha Cloud:
+Одноразовый код: 780186
+или:
+ID: FbavAz2vcZGst8sdSvfaf9
+Пароль: X8RfR78cvL
