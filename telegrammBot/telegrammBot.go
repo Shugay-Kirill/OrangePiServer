@@ -2,155 +2,184 @@ package main
 
 import (
 	"log"
-	"os"
-	"strconv"
-	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type Bot struct {
-	api      *tgbotapi.BotAPI
-	commands map[string]func(update tgbotapi.Update)
+	api    *tgbotapi.BotAPI
+	config *Config
 }
 
-func NewBot(token string) (*Bot, error) {
-	api, err := tgbotapi.NewBotAPI(token)
+func NewBot(config *Config) (*Bot, error) {
+	api, err := tgbotapi.NewBotAPI(config.TelegramToken)
 	if err != nil {
 		return nil, err
 	}
 
-	bot := &Bot{
-		api:      api,
-		commands: make(map[string]func(update tgbotapi.Update)),
-	}
+	api.Debug = config.Debug
 
-	bot.registerCommands()
-	return bot, nil
-}
-
-func (b *Bot) registerCommands() {
-	// Регистрация команд
-	b.commands["/start"] = b.handleStart
-	b.commands["/help"] = b.handleHelp
-	b.commands["/echo"] = b.handleEcho
-	b.commands["/calc"] = b.handleCalc
+	return &Bot{
+		api:    api,
+		config: config,
+	}, nil
 }
 
 func (b *Bot) handleStart(update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID,
-		"🤖 Добро пожаловать!\n\n"+
-			"Я пример бота на Go.\n"+
-			"Доступные команды:\n"+
-			"/start - начать работу\n"+
-			"/help - помощь\n"+
-			"/echo [текст] - эхо\n"+
-			"/calc [число] [оператор] [число] - калькулятор\n\n"+
-			"Просто напиши мне что-нибудь!")
-	b.sendMessage(msg)
-}
+	var message string
+	user := update.Message.From
 
-func (b *Bot) handleHelp(update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID,
-		"📖 Помощь по боту:\n\n"+
-			"• /start - начать работу\n"+
-			"• /help - показать эту справку\n"+
-			"• /echo [текст] - повторить текст\n"+
-			"• /calc [число] [+-*/] [число] - простой калькулятор\n\n"+
-			"Примеры:\n"+
-			"/echo Привет мир!\n"+
-			"/calc 5 + 3")
-	b.sendMessage(msg)
-}
+	// Определяем, где было отправлено сообщение
+	chatType := b.getChatType(update.Message.Chat)
+	topicInfo := b.getTopicInfo(update.Message)
 
-func (b *Bot) handleEcho(update tgbotapi.Update) {
-	text := update.Message.Text
-	args := strings.TrimSpace(strings.TrimPrefix(text, "/echo"))
+	if chatType == "private" {
+		message = `🤖 <b>Привет, %s!</b>
 
-	if args == "" {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "📝 Использование: /echo [текст]")
-		b.sendMessage(msg)
-		return
+Рад приветствовать вас! Это простой Telegram бот.
+
+Бот успешно запущен и работает! 🚀
+
+<b>Команды:</b>
+/start - показать это сообщение`
+	} else {
+		message = `🤖 <b>Привет всем!</b>
+
+Я бот для работы в группах и темах.
+
+<b>Особенности:</b>
+• Отвечаю в том же топике, где написали
+• Понимаю контекст обсуждения
+• Работаю в группах и супергруппах
+
+Используйте /start в любом топике!`
 	}
 
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "🔊 "+args)
-	b.sendMessage(msg)
-}
-
-func (b *Bot) handleCalc(update tgbotapi.Update) {
-	text := update.Message.Text
-	args := strings.Fields(strings.TrimPrefix(text, "/calc"))
-
-	if len(args) != 3 {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID,
-			"🧮 Использование: /calc [число] [оператор] [число]\n"+
-				"Пример: /calc 5 + 3")
-		b.sendMessage(msg)
-		return
+	// Добавляем информацию о топике если есть
+	if topicInfo != "" {
+		message += "\n\n" + topicInfo
 	}
 
-	a, err1 := strconv.ParseFloat(args[0], 64)
-	operator := args[1]
-	bNum, err2 := strconv.ParseFloat(args[2], 64)
-
-	if err1 != nil || err2 != nil {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "❌ Ошибка: неверный формат чисел")
-		b.sendMessage(msg)
-		return
-	}
-
-	var result float64
-	var errorMsg string
-
-	switch operator {
-	case "+":
-		result = a + bNum
-	case "-":
-		result = a - bNum
-	case "*":
-		result = a * bNum
-	case "/":
-		if bNum == 0 {
-			errorMsg = "❌ Ошибка: деление на ноль"
-		} else {
-			result = a / bNum
-		}
-	default:
-		errorMsg = "❌ Ошибка: неверный оператор. Используйте +, -, *, /"
-	}
-
-	if errorMsg != "" {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, errorMsg)
-		b.sendMessage(msg)
-		return
-	}
-
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID,
-		"🧮 Результат: "+args[0]+" "+operator+" "+args[2]+" = "+strconv.FormatFloat(result, 'f', -1, 64))
-	b.sendMessage(msg)
-}
-
-func (b *Bot) handleUnknownCommand(update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID,
-		"❓ Неизвестная команда. Используйте /help для списка команд.")
-	b.sendMessage(msg)
-}
-
-func (b *Bot) handleTextMessage(update tgbotapi.Update) {
-	response := "📨 Вы написали: " + update.Message.Text
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
-	b.sendMessage(msg)
-}
-
-func (b *Bot) sendMessage(msg tgbotapi.MessageConfig) {
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
 	msg.ParseMode = "HTML"
+
+	// Устанавливаем ID топика, если сообщение из топика
+	if update.Message.MessageThreadID != 0 {
+		msg.MessageThreadID = update.Message.MessageThreadID
+	}
+
 	if _, err := b.api.Send(msg); err != nil {
 		log.Printf("Ошибка отправки сообщения: %v", err)
 	}
 }
 
+func (b *Bot) handleMessage(update tgbotapi.Update) {
+	// Логируем информацию о сообщении
+	chatType := b.getChatType(update.Message.Chat)
+	topicInfo := b.getTopicInfo(update.Message)
+
+	log.Printf("Сообщение от [%s %s] в %s%s: %s",
+		update.Message.From.FirstName,
+		update.Message.From.LastName,
+		chatType,
+		topicInfo,
+		update.Message.Text)
+
+	// Создаем ответ с учетом топика
+	var response string
+
+	if update.Message.IsCommand() {
+		response = "❌ <b>Неизвестная команда</b>\nИспользуйте /start для получения информации"
+	} else {
+		response = "✅ <b>Сообщение получено!</b>\n\n" +
+			"Я получил ваше сообщение в этом топике: <i>\"" + update.Message.Text + "\"</i>\n\n" +
+			"Используйте /start для получения информации о боте."
+	}
+
+	// Добавляем информацию о месте отправки
+	response += "\n\n📍 <i>Отправлено в: " + chatType
+	if topicInfo != "" {
+		response += " • " + topicInfo
+	}
+	response += "</i>"
+
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
+	msg.ParseMode = "HTML"
+
+	// Ключевой момент: указываем тот же MessageThreadID
+	if update.Message.MessageThreadID != 0 {
+		msg.MessageThreadID = update.Message.MessageThreadID
+		log.Printf("Отвечаю в топик ID: %d", update.Message.MessageThreadID)
+	}
+
+	if _, err := b.api.Send(msg); err != nil {
+		log.Printf("Ошибка отправки сообщения: %v", err)
+	}
+}
+
+// getChatType определяет тип чата
+func (b *Bot) getChatType(chat *tgbotapi.Chat) string {
+	switch {
+	case chat.IsPrivate():
+		return "личные сообщения"
+	case chat.IsGroup():
+		return "группа"
+	case chat.IsSuperGroup():
+		return "супергруппа"
+	case chat.IsChannel():
+		return "канал"
+	default:
+		return "неизвестный чат"
+	}
+}
+
+// getTopicInfo возвращает информацию о топике
+func (b *Bot) getTopicInfo(message *tgbotapi.Message) string {
+	if message.MessageThreadID == 0 {
+		return "" // Не топик
+	}
+
+	// Если это корневое сообщение топика (TopicCreated)
+	if message.ForumTopicCreated != nil {
+		return "топик: " + message.ForumTopicCreated.Name
+	}
+
+	// Если это обычное сообщение в топике
+	if message.MessageThreadID != 0 {
+		// Пытаемся получить информацию о топике
+		// В реальном приложении здесь можно кешировать названия топиков
+		return "топик ID: " + string(rune(message.MessageThreadID))
+	}
+
+	return ""
+}
+
+// handleTopicCreated обрабатывает создание нового топика
+func (b *Bot) handleTopicCreated(update tgbotapi.Update) {
+	if update.Message == nil || update.Message.ForumTopicCreated == nil {
+		return
+	}
+
+	topicName := update.Message.ForumTopicCreated.Name
+	log.Printf("Создан новый топик: %s", topicName)
+
+	response := "🎉 <b>Новый топик создан!</b>\n\n" +
+		"Название: <i>" + topicName + "</i>\n\n" +
+		"Приветствую всех участников! Я буду отвечать в этом топике."
+
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
+	msg.ParseMode = "HTML"
+	msg.MessageThreadID = update.Message.MessageThreadID
+
+	if _, err := b.api.Send(msg); err != nil {
+		log.Printf("Ошибка отправки приветствия в топик: %v", err)
+	}
+}
+
 func (b *Bot) Start() {
-	log.Printf("Авторизован как %s", b.api.Self.UserName)
+	log.Printf("Бот авторизован как: %s (ID: %d)", b.api.Self.UserName, b.api.Self.ID)
+	log.Printf("Режим отладки: %v", b.config.Debug)
+	log.Println("Бот запущен и ожидает сообщений...")
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
@@ -162,34 +191,31 @@ func (b *Bot) Start() {
 			continue
 		}
 
-		log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-
-		// Обработка команд
-		if update.Message.IsCommand() {
-			command := update.Message.Command()
-			if handler, exists := b.commands["/"+command]; exists {
-				handler(update)
-			} else {
-				b.handleUnknownCommand(update)
-			}
+		// Обрабатываем создание топика
+		if update.Message.ForumTopicCreated != nil {
+			b.handleTopicCreated(update)
 			continue
 		}
 
-		// Обработка обычных текстовых сообщений
-		b.handleTextMessage(update)
+		// Обработка команды /start
+		if update.Message.IsCommand() && update.Message.Command() == "start" {
+			b.handleStart(update)
+			continue
+		}
+
+		// Обработка всех остальных сообщений
+		b.handleMessage(update)
 	}
 }
 
 func main() {
-	// Получение токена из переменной окружения
-	token := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if token == "" {
-		log.Fatal("TELEGRAM_BOT_TOKEN не установлен")
-	}
+	log.Println("Загрузка конфигурации...")
+	config := LoadConfig()
 
-	bot, err := NewBot(token)
+	log.Println("Инициализация бота...")
+	bot, err := NewBot(config)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Ошибка инициализации бота:", err)
 	}
 
 	bot.Start()
