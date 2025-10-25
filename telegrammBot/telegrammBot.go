@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"strconv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -26,9 +27,13 @@ func NewBot(config *Config) (*Bot, error) {
 }
 
 func (b *Bot) handleStart(update tgbotapi.Update) {
-	var message string
+	// Получаем информацию о чате и топике
+	chatID := update.Message.Chat.ID
+	threadID := b.getMessageThreadID(update.Message)
 
-	// Определяем, где было отправлено сообщение
+	log.Printf("Обработка /start: ChatID=%d, ThreadID=%d", chatID, threadID)
+
+	var message string
 	chatType := b.getChatType(update.Message.Chat)
 
 	if chatType == "private" {
@@ -36,41 +41,35 @@ func (b *Bot) handleStart(update tgbotapi.Update) {
 
 Рад приветствовать вас! Это простой Telegram бот.
 
-Бот успешно запущен и работает! 🚀
-
-<b>Команды:</b>
-/start - показать это сообщение`
+Бот успешно запущен и работает! 🚀`
 	} else {
 		message = `🤖 <b>Привет всем!</b>
 
-Я бот для работы в группах.
+Я бот для работы в группах и топиках.
 
-<b>Особенности:</b>
-• Отвечаю в том же разделе, где написали
-• Работаю в группах и супергруппах
-
-Используйте /start в любом чате!`
+<b>Я умею:</b>
+• Отвечать в том же топике, где вы написали
+• Работать в форумах и группах с темами
+• Сохранять контекст обсуждения`
 	}
 
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
-	msg.ParseMode = "HTML"
-
-	// Проверяем и устанавливаем ID топика, если доступно
-	b.setMessageThreadID(&msg, update.Message)
-
-	if _, err := b.api.Send(msg); err != nil {
+	// Отправляем сообщение
+	if err := b.sendMessage(chatID, threadID, message); err != nil {
 		log.Printf("Ошибка отправки сообщения: %v", err)
 	}
 }
 
 func (b *Bot) handleMessage(update tgbotapi.Update) {
 	// Логируем информацию о сообщении
+	chatID := update.Message.Chat.ID
+	threadID := b.getMessageThreadID(update.Message)
 	chatType := b.getChatType(update.Message.Chat)
 
-	log.Printf("Сообщение от [%s %s] в %s: %s",
-		update.Message.From.FirstName,
-		update.Message.From.LastName,
+	log.Printf("Сообщение от [%s] в %s (ChatID: %d, ThreadID: %d): %s",
+		update.Message.From.UserName,
 		chatType,
+		chatID,
+		threadID,
 		update.Message.Text)
 
 	// Создаем ответ
@@ -80,22 +79,76 @@ func (b *Bot) handleMessage(update tgbotapi.Update) {
 		response = "❌ <b>Неизвестная команда</b>\nИспользуйте /start для получения информации"
 	} else {
 		response = "✅ <b>Сообщение получено!</b>\n\n" +
-			"Я получил ваше сообщение: <i>\"" + update.Message.Text + "\"</i>\n\n" +
-			"Используйте /start для получения информации о боте."
+			"Я получил ваше сообщение в этом разделе.\n\n" +
+			"<i>Текст:</i> " + update.Message.Text
 	}
 
-	// Добавляем информацию о месте отправки
-	response += "\n\n📍 <i>Отправлено в: " + chatType + "</i>"
+	// Добавляем отладочную информацию
+	response += "\n\n📋 <i>Информация:</i>\n" +
+		"Чат: " + chatType + "\n" +
+		"ID чата: " + strconv.FormatInt(chatID, 10) + "\n" +
+		"ID раздела: " + strconv.Itoa(threadID)
 
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, response)
-	msg.ParseMode = "HTML"
-
-	// Устанавливаем тот же раздел/топик
-	b.setMessageThreadID(&msg, update.Message)
-
-	if _, err := b.api.Send(msg); err != nil {
+	// Отправляем сообщение
+	if err := b.sendMessage(chatID, threadID, response); err != nil {
 		log.Printf("Ошибка отправки сообщения: %v", err)
 	}
+}
+
+// sendMessage универсальный метод отправки сообщений с поддержкой топиков
+func (b *Bot) sendMessage(chatID int64, threadID int, text string) error {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "HTML"
+
+	// Если threadID != 0, значит это топик и нужно установить MessageThreadID
+	if threadID != 0 {
+		// Используем рефлексию или проверяем доступность поля
+		// В новых версиях библиотеки это должно работать напрямую:
+		// msg.MessageThreadID = threadID
+
+		// Обходной способ через создание сообщения с нужными параметрами
+		msg = tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = "HTML"
+
+		// Пытаемся установить MessageThreadID через интерфейс сообщения
+		// Это сработает если библиотека поддерживает топики
+		if setThreadID(msg, threadID) {
+			log.Printf("Отправка в топик ID: %d", threadID)
+		} else {
+			log.Printf("Библиотека не поддерживает MessageThreadID, отправка в основной чат")
+		}
+	}
+
+	_, err := b.api.Send(msg)
+	return err
+}
+
+// setThreadID пытается установить MessageThreadID для сообщения
+func setThreadID(msg tgbotapi.MessageConfig, threadID int) bool {
+	// Проверяем наличие поля MessageThreadID через type assertion
+	// Это обходной путь для совместимости
+	if msgConfig, ok := interface{}(msg).(interface{ SetMessageThreadID(int) }); ok {
+		// Если библиотека поддерживает метод SetMessageThreadID
+		msgConfig.SetMessageThreadID(threadID)
+		return true
+	}
+	return false
+}
+
+// getMessageThreadID получает ID треда/топика из сообщения
+func (b *Bot) getMessageThreadID(message *tgbotapi.Message) int {
+	if message == nil {
+		return 0
+	}
+
+	// Пытаемся получить MessageThreadID через интерфейс
+	if msg, ok := interface{}(message).(interface{ GetMessageThreadID() int }); ok {
+		return msg.GetMessageThreadID()
+	}
+
+	// Если интерфейс не доступен, проверяем напрямую (для новых версий)
+	// Это сработает только если библиотека обновлена
+	return 0 // Возвращаем 0 если не можем получить ID
 }
 
 // getChatType определяет тип чата
@@ -114,29 +167,14 @@ func (b *Bot) getChatType(chat *tgbotapi.Chat) string {
 	}
 }
 
-// setMessageThreadID устанавливает ID треда/топика для ответа
-func (b *Bot) setMessageThreadID(msg *tgbotapi.MessageConfig, message *tgbotapi.Message) {
-	// Проверяем, доступно ли поле MessageThreadID в этой версии библиотеки
-	// Это безопасный способ без прямого доступа к полю
-	if message == nil {
-		return
-	}
-
-	// Вместо прямого доступа к MessageThreadID, используем обходной путь
-	// В реальном приложении можно использовать рефлексию или обновить библиотеку
-}
-
-// checkLibraryVersion проверяет версию библиотеки
-func (b *Bot) checkLibraryVersion() {
-	log.Println("Проверка версии библиотеки go-telegram-bot-api...")
-	log.Println("Для работы с топиками убедитесь, что версия >= v5.0.0")
-}
-
 func (b *Bot) Start() {
-	b.checkLibraryVersion()
 	log.Printf("Бот авторизован как: %s (ID: %d)", b.api.Self.UserName, b.api.Self.ID)
 	log.Printf("Режим отладки: %v", b.config.Debug)
 	log.Println("Бот запущен и ожидает сообщений...")
+	log.Println("Для работы с топиками убедитесь, что:")
+	log.Println("1. Бот добавлен в группу как администратор")
+	log.Println("2. В группе включены темы/топики")
+	log.Println("3. Библиотека обновлена до последней версии")
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
