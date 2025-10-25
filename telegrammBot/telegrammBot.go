@@ -105,7 +105,7 @@ func (b *Bot) getThreadIDFromMessage(message *tgbotapi.Message) int {
 	// Проверяем через рефлексию
 	messageValue := reflect.ValueOf(message).Elem()
 	if messageValue.IsValid() {
-		threadIDField := messageValue.FieldByName("MessageThreadID")
+		threadIDField := messageValue.FieldByName("message_thread_id")
 		if threadIDField.IsValid() && threadIDField.CanInterface() {
 			if threadID, ok := threadIDField.Interface().(int); ok {
 				return threadID
@@ -117,7 +117,7 @@ func (b *Bot) getThreadIDFromMessage(message *tgbotapi.Message) int {
 	if message.ReplyToMessage != nil {
 		replyValue := reflect.ValueOf(message.ReplyToMessage).Elem()
 		if replyValue.IsValid() {
-			threadIDField := replyValue.FieldByName("MessageThreadID")
+			threadIDField := replyValue.FieldByName("message_thread_id")
 			if threadIDField.IsValid() && threadIDField.CanInterface() {
 				if threadID, ok := threadIDField.Interface().(int); ok {
 					return threadID
