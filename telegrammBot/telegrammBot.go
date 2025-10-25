@@ -7,10 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
-
-	"github.com/joho/godotenv"
 )
 
 type Bot struct {
@@ -41,36 +38,6 @@ type Chat struct {
 	ID    int64  `json:"id"`
 	Type  string `json:"type"`
 	Title string `json:"title"`
-}
-
-type Config struct {
-	TelegramToken string
-	Debug         bool
-}
-
-func LoadConfig() *Config {
-	_ = godotenv.Load()
-
-	return &Config{
-		TelegramToken: getEnv("TELEGRAM_BOT_TOKEN", ""),
-		Debug:         getEnvAsBool("DEBUG", false),
-	}
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvAsBool(key string, defaultValue bool) bool {
-	if value := os.Getenv(key); value != "" {
-		if boolValue, err := strconv.ParseBool(value); err == nil {
-			return boolValue
-		}
-	}
-	return defaultValue
 }
 
 func NewBot(config *Config) *Bot {
