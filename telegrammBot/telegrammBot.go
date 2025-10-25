@@ -1,15 +1,51 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
 	"strconv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/joho/godotenv"
 )
 
 type Bot struct {
 	api    *tgbotapi.BotAPI
 	config *Config
+	token  string
+}
+
+type Config struct {
+	TelegramToken string
+	Debug         bool
+}
+
+func LoadConfig() *Config {
+	_ = godotenv.Load()
+
+	return &Config{
+		TelegramToken: getEnv("TELEGRAM_BOT_TOKEN", ""),
+		Debug:         getEnvAsBool("DEBUG", false),
+	}
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
+		}
+	}
+	return defaultValue
 }
 
 func NewBot(config *Config) (*Bot, error) {
@@ -23,162 +59,137 @@ func NewBot(config *Config) (*Bot, error) {
 	return &Bot{
 		api:    api,
 		config: config,
+		token:  config.TelegramToken,
 	}, nil
 }
 
+// sendMessageToThread отправляет сообщение в конкретный топик через прямой HTTP запрос
+func (b *Bot) sendMessageToThread(chatID int64, threadID int, text string) error {
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", b.token)
+
+	requestBody := map[string]interface{}{
+		"chat_id":    chatID,
+		"text":       text,
+		"parse_mode": "HTML",
+	}
+
+	// Если threadID не 0, добавляем параметр message_thread_id
+	if threadID != 0 {
+		requestBody["message_thread_id"] = threadID
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP error: %s", resp.Status)
+	}
+
+	log.Printf("Сообщение отправлено в чат %d, топик %d", chatID, threadID)
+	return nil
+}
+
+// getThreadIDFromMessage пытается извлечь ID топика из сообщения
+func (b *Bot) getThreadIDFromMessage(message *tgbotapi.Message) int {
+	// В новых версиях библиотеки это поле должно быть доступно
+	// Если нет, используем рефлексию или другие методы
+
+	// Проверяем через рефлексию
+	messageValue := reflect.ValueOf(message).Elem()
+	if messageValue.IsValid() {
+		threadIDField := messageValue.FieldByName("MessageThreadID")
+		if threadIDField.IsValid() && threadIDField.CanInterface() {
+			if threadID, ok := threadIDField.Interface().(int); ok {
+				return threadID
+			}
+		}
+	}
+
+	// Если рефлексия не сработала, пробуем получить из Reply если это ответ в топике
+	if message.ReplyToMessage != nil {
+		replyValue := reflect.ValueOf(message.ReplyToMessage).Elem()
+		if replyValue.IsValid() {
+			threadIDField := replyValue.FieldByName("MessageThreadID")
+			if threadIDField.IsValid() && threadIDField.CanInterface() {
+				if threadID, ok := threadIDField.Interface().(int); ok {
+					return threadID
+				}
+			}
+		}
+	}
+
+	return 0
+}
+
 func (b *Bot) handleStart(update tgbotapi.Update) {
-	// Получаем информацию о чате и топике
 	chatID := update.Message.Chat.ID
-	threadID := b.getMessageThreadID(update.Message)
+	threadID := b.getThreadIDFromMessage(update.Message)
 
 	log.Printf("Обработка /start: ChatID=%d, ThreadID=%d", chatID, threadID)
 
-	var message string
-	chatType := b.getChatType(update.Message.Chat)
+	message := `🤖 <b>Бот запущен!</b>
 
-	if chatType == "private" {
-		message = `🤖 <b>Привет!</b>
+Отлично! Я работаю в этом разделе.
 
-Рад приветствовать вас! Это простой Telegram бот.
+<b>Информация:</b>
+• ID чата: ` + strconv.FormatInt(chatID, 10) + `
+• ID раздела: ` + strconv.Itoa(threadID) + `
+• Сообщение получено в теме! ✅`
 
-Бот успешно запущен и работает! 🚀`
-	} else {
-		message = `🤖 <b>Привет всем!</b>
-
-Я бот для работы в группах и топиках.
-
-<b>Я умею:</b>
-• Отвечать в том же топике, где вы написали
-• Работать в форумах и группах с темами
-• Сохранять контекст обсуждения`
-	}
-
-	// Отправляем сообщение
-	if err := b.sendMessage(chatID, threadID, message); err != nil {
-		log.Printf("Ошибка отправки сообщения: %v", err)
+	if err := b.sendMessageToThread(chatID, threadID, message); err != nil {
+		log.Printf("Ошибка отправки: %v", err)
+		// Fallback: отправляем обычным способом
+		b.sendFallbackMessage(chatID, message)
 	}
 }
 
 func (b *Bot) handleMessage(update tgbotapi.Update) {
-	// Логируем информацию о сообщении
 	chatID := update.Message.Chat.ID
-	threadID := b.getMessageThreadID(update.Message)
-	chatType := b.getChatType(update.Message.Chat)
+	threadID := b.getThreadIDFromMessage(update.Message)
 
-	log.Printf("Сообщение от [%s] в %s (ChatID: %d, ThreadID: %d): %s",
-		update.Message.From.UserName,
-		chatType,
-		chatID,
-		threadID,
-		update.Message.Text)
+	log.Printf("Сообщение от [%s] в ChatID=%d, ThreadID=%d: %s",
+		update.Message.From.UserName, chatID, threadID, update.Message.Text)
 
-	// Создаем ответ
-	var response string
+	response := `✅ <b>Сообщение получено в теме!</b>
 
-	if update.Message.IsCommand() {
-		response = "❌ <b>Неизвестная команда</b>\nИспользуйте /start для получения информации"
-	} else {
-		response = "✅ <b>Сообщение получено!</b>\n\n" +
-			"Я получил ваше сообщение в этом разделе.\n\n" +
-			"<i>Текст:</i> " + update.Message.Text
-	}
+<b>Текст:</b> ` + update.Message.Text + `
 
-	// Добавляем отладочную информацию
-	response += "\n\n📋 <i>Информация:</i>\n" +
-		"Чат: " + chatType + "\n" +
-		"ID чата: " + strconv.FormatInt(chatID, 10) + "\n" +
-		"ID раздела: " + strconv.Itoa(threadID)
+<b>Отладочная информация:</b>
+• ID чата: ` + strconv.FormatInt(chatID, 10) + `
+• ID раздела: ` + strconv.Itoa(threadID) + `
+• Username: @` + update.Message.From.UserName + `
 
-	// Отправляем сообщение
-	if err := b.sendMessage(chatID, threadID, response); err != nil {
-		log.Printf("Ошибка отправки сообщения: %v", err)
+🎯 <i>Этот ответ должен быть в той же теме!</i>`
+
+	if err := b.sendMessageToThread(chatID, threadID, response); err != nil {
+		log.Printf("Ошибка отправки в топик: %v", err)
+		b.sendFallbackMessage(chatID, response)
 	}
 }
 
-// sendMessage универсальный метод отправки сообщений с поддержкой топиков
-func (b *Bot) sendMessage(chatID int64, threadID int, text string) error {
+// sendFallbackMessage обычная отправка через библиотеку
+func (b *Bot) sendFallbackMessage(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = "HTML"
-
-	// Если threadID != 0, значит это топик и нужно установить MessageThreadID
-	if threadID != 0 {
-		// Используем рефлексию или проверяем доступность поля
-		// В новых версиях библиотеки это должно работать напрямую:
-		// msg.MessageThreadID = threadID
-
-		// Обходной способ через создание сообщения с нужными параметрами
-		msg = tgbotapi.NewMessage(chatID, text)
-		msg.ParseMode = "HTML"
-
-		// Пытаемся установить MessageThreadID через интерфейс сообщения
-		// Это сработает если библиотека поддерживает топики
-		if setThreadID(msg, threadID) {
-			log.Printf("Отправка в топик ID: %d", threadID)
-		} else {
-			log.Printf("Библиотека не поддерживает MessageThreadID, отправка в основной чат")
-		}
-	}
-
-	_, err := b.api.Send(msg)
-	return err
-}
-
-// setThreadID пытается установить MessageThreadID для сообщения
-func setThreadID(msg tgbotapi.MessageConfig, threadID int) bool {
-	// Проверяем наличие поля MessageThreadID через type assertion
-	// Это обходной путь для совместимости
-	if msgConfig, ok := interface{}(msg).(interface{ SetMessageThreadID(int) }); ok {
-		// Если библиотека поддерживает метод SetMessageThreadID
-		msgConfig.SetMessageThreadID(threadID)
-		return true
-	}
-	return false
-}
-
-// getMessageThreadID получает ID треда/топика из сообщения
-func (b *Bot) getMessageThreadID(message *tgbotapi.Message) int {
-	if message == nil {
-		return 0
-	}
-
-	// Пытаемся получить MessageThreadID через интерфейс
-	if msg, ok := interface{}(message).(interface{ GetMessageThreadID() int }); ok {
-		return msg.GetMessageThreadID()
-	}
-
-	// Если интерфейс не доступен, проверяем напрямую (для новых версий)
-	// Это сработает только если библиотека обновлена
-	return 0 // Возвращаем 0 если не можем получить ID
-}
-
-// getChatType определяет тип чата
-func (b *Bot) getChatType(chat *tgbotapi.Chat) string {
-	switch {
-	case chat.IsPrivate():
-		return "личные сообщения"
-	case chat.IsGroup():
-		return "группа"
-	case chat.IsSuperGroup():
-		return "супергруппа"
-	case chat.IsChannel():
-		return "канал"
-	default:
-		return "неизвестный чат"
+	if _, err := b.api.Send(msg); err != nil {
+		log.Printf("Ошибка fallback отправки: %v", err)
 	}
 }
 
 func (b *Bot) Start() {
-	log.Printf("Бот авторизован как: %s (ID: %d)", b.api.Self.UserName, b.api.Self.ID)
-	log.Printf("Режим отладки: %v", b.config.Debug)
-	log.Println("Бот запущен и ожидает сообщений...")
-	log.Println("Для работы с топиками убедитесь, что:")
-	log.Println("1. Бот добавлен в группу как администратор")
-	log.Println("2. В группе включены темы/топики")
-	log.Println("3. Библиотека обновлена до последней версии")
+	log.Printf("Бот авторизован как: %s", b.api.Self.UserName)
+	log.Println("Бот запущен с поддержкой топиков через прямое API")
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
-
 	updates := b.api.GetUpdatesChan(u)
 
 	for update := range updates {
@@ -186,13 +197,11 @@ func (b *Bot) Start() {
 			continue
 		}
 
-		// Обработка команды /start
 		if update.Message.IsCommand() && update.Message.Command() == "start" {
 			b.handleStart(update)
 			continue
 		}
 
-		// Обработка всех остальных сообщений
 		b.handleMessage(update)
 	}
 }
