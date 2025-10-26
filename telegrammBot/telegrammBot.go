@@ -146,6 +146,19 @@ func (b *Bot) handleUpdate(update Update) {
 		log.Printf("   🏷️ Название чата: %s", update.Message.Chat.Title)
 	}
 
+	// Проверяем тип контента
+	if len(update.Message.Photo) > 0 {
+		log.Printf("   📸 Фото: %d вариантов размера", len(update.Message.Photo))
+		b.handlePhoto(update)
+		return
+	}
+
+	if update.Message.Document.FileID != "" {
+		log.Printf("   📎 Документ: %s", update.Message.Document.FileName)
+		b.handleDocument(update)
+		return
+	}
+
 	// Обрабатываем команды
 	if update.Message.Text == "/start" {
 		b.handleStart(update)
@@ -153,7 +166,7 @@ func (b *Bot) handleUpdate(update Update) {
 	}
 
 	// Обрабатываем обычные сообщения
-	if update.Message.Text == "/infoMessege" {
+	if update.Message.Text == "/infoMessage" {
 		b.handleRegularMessage(update)
 		return
 	}
@@ -249,6 +262,120 @@ func (b *Bot) sendMessage(chatID int64, threadID int, text string) error {
 	log.Printf("   🏷️ Топик: %d", threadID)
 
 	return nil
+}
+
+// isJPGImage проверяет, является ли документ JPG изображением
+func (b *Bot) isJPGImage(document Document) bool {
+	// Проверяем MIME type
+	if strings.HasPrefix(document.MimeType, "image/jpeg") {
+		return true
+	}
+
+	// Проверяем расширение файла
+	fileName := strings.ToLower(document.FileName)
+	if strings.HasSuffix(fileName, ".jpg") || strings.HasSuffix(fileName, ".jpeg") {
+		return true
+	}
+
+	// Дополнительная проверка по MIME type для других вариантов
+	if document.MimeType == "image/jpg" {
+		return true
+	}
+
+	return false
+}
+
+func (b *Bot) handlePhoto(update Update) {
+	chatID := update.Message.Chat.ID
+	threadID := update.Message.MessageThreadID
+
+	// Получаем фото наибольшего размера
+	largestPhoto := b.getLargestPhoto(update.Message.Photo)
+
+	message := fmt.Sprintf(`📸 <b>Получено фото!</b>
+
+🖼️ <b>Информация о фото:</b>
+• 📏 Размер: <b>%d×%d</b> пикселей
+• 💾 Вес: <b>%.2f KB</b>
+• 🆔 File ID: <code>%s</code>
+
+📝 <b>Подпись:</b> %s
+
+✅ <b>Статус:</b> Это JPG изображение (Telegram конвертирует все фото в JPG)
+
+🎯 <i>Фото успешно обработано!</i>`,
+		largestPhoto.Width,
+		largestPhoto.Height,
+		float64(largestPhoto.FileSize)/1024,
+		largestPhoto.FileID[:20]+"...", // Показываем только часть ID
+		b.getCaptionText(update.Message.Caption),
+	)
+
+	if err := b.sendMessage(chatID, threadID, message); err != nil {
+		log.Printf("❌ Ошибка отправки: %v", err)
+	}
+}
+
+func (b *Bot) handleDocument(update Update) {
+	chatID := update.Message.Chat.ID
+	threadID := update.Message.MessageThreadID
+
+	document := update.Message.Document
+	isJPG := b.isJPGImage(document)
+
+	var status string
+	if isJPG {
+		status = "✅ <b>Это JPG изображение!</b>"
+	} else {
+		status = "❌ <b>Это не JPG изображение</b>"
+	}
+
+	message := fmt.Sprintf(`📎 <b>Получен документ!</b>
+
+📋 <b>Информация о файле:</b>
+• 📝 Имя: <code>%s</code>
+• 🏷️ MIME Type: <b>%s</b>
+• 💾 Размер: <b>%.2f KB</b>
+• 🆔 File ID: <code>%s</code>
+
+📝 <b>Подпись:</b> %s
+
+%s
+
+🎯 <i>Документ проверен на соответствие формату JPG!</i>`,
+		document.FileName,
+		document.MimeType,
+		float64(document.FileSize)/1024,
+		document.FileID[:20]+"...",
+		b.getCaptionText(update.Message.Caption),
+		status,
+	)
+
+	if err := b.sendMessage(chatID, threadID, message); err != nil {
+		log.Printf("❌ Ошибка отправки: %v", err)
+	}
+}
+
+func (b *Bot) handleOtherMessage(update Update) {
+	chatID := update.Message.Chat.ID
+	threadID := update.Message.MessageThreadID
+
+	message := `🔮 <b>Получено сообщение другого типа!</b>
+
+📊 <b>Информация:</b>
+• Тип: Не текстовое сообщение
+• Может содержать: фото, документ, стикер, голосовое и т.д.
+
+💡 <b>Что я умею проверять:</b>
+• 📸 Фотографии (автоматически определяю как JPG)
+• 📎 Документы (проверяю формат JPG)
+• 💬 Текстовые сообщения
+
+🎯 <i>Используйте /help для получения списка команд</i>`
+
+	if err := b.sendMessage(chatID, threadID, message); err != nil {
+		log.Printf("❌ Ошибка отправки: %v", err)
+	}
 }
 
 func main() {
