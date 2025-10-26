@@ -9,27 +9,19 @@ import (
 )
 
 type Config struct {
-	TelegramToken string
-	Debug         bool
+	TelegramToken      string
+	Debug              bool
+	MaxLengthAPIOutput int
 }
 
 func LoadConfig() *Config {
-	err := godotenv.Load()
-	if err != nil {
-		log.Printf("Warning: .env file not found, using system environment variables")
-	}
+	_ = godotenv.Load()
 
-	config := &Config{
-		TelegramToken: getEnv("TELEGRAM_BOT_TOKEN", ""),
-		Debug:         getEnvAsBool("DEBUG", false),
+	return &Config{
+		TelegramToken:      getEnv("TELEGRAM_BOT_TOKEN", ""),
+		Debug:              getEnvAsBool("DEBUG", false),
+		MaxLengthAPIOutput: getEnvAsInt("MAX_LENGTH_MESSEGE_API", 200),
 	}
-
-	if config.TelegramToken == "" {
-		log.Fatal("TELEGRAM_BOT_TOKEN is required. Please set it in .env file or environment variables")
-	}
-
-	log.Printf("Config loaded: Debug=%v", config.Debug)
-	return config
 }
 
 func getEnv(key, defaultValue string) string {
@@ -43,6 +35,15 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 	if value := os.Getenv(key); value != "" {
 		if boolValue, err := strconv.ParseBool(value); err == nil {
 			return boolValue
+		}
+	}
+	return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
 		}
 	}
 	return defaultValue
