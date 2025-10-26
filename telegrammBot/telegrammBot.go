@@ -80,8 +80,9 @@ func (b *Bot) getUpdates(offset int) ([]Update, error) {
 	}
 
 	// Логируем сырой ответ для отладки
+	maxLength := 500
 	if len(body) > 0 {
-		log.Printf("📨 Получен ответ от API: %s", string(body)[:min(200, len(body))])
+		log.Printf("📨 Получен ответ от API: %s", string(body)[:min(maxLength, len(body))])
 	}
 
 	var response struct {
@@ -131,7 +132,11 @@ func (b *Bot) handleUpdate(update Update) {
 	}
 
 	// Обрабатываем обычные сообщения
-	b.handleRegularMessage(update)
+	if update.Message.Text == "/infoMessege" {
+		b.handleRegularMessage(update)
+		return
+	}
+
 }
 
 func (b *Bot) handleStart(update Update) {
