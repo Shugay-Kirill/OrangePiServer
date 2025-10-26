@@ -80,7 +80,7 @@ func (b *Bot) getUpdates(offset int) ([]Update, error) {
 	}
 
 	// Логируем сырой ответ для отладки
-	maxLength := 500
+	maxLength := 5000
 	if len(body) > 0 {
 		log.Printf("📨 Получен ответ от API: %s", string(body)[:min(maxLength, len(body))])
 	}
