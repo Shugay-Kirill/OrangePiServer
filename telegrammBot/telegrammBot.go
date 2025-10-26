@@ -17,8 +17,8 @@ type Bot struct {
 }
 
 type Update struct {
-	UpdateID int     `json:"update_id"`
-	Message  Message `json:"message"`
+	UpdateID int      `json:"update_id"`
+	Message  *Message `json:"message"` // Изменено на указатель
 }
 
 type Message struct {
@@ -137,55 +137,58 @@ func min(a, b int) int {
 }
 
 func (b *Bot) handleUpdate(update Update) {
+	// Проверяем, что Message не nil
 	if update.Message == nil {
 		return
 	}
 
+	message := update.Message
+
 	log.Printf("📩 Получено сообщение:")
-	log.Printf("   👤 От: %s (@%s)", update.Message.From.FirstName, update.Message.From.Username)
-	log.Printf("   🆔 Chat ID: %d", update.Message.Chat.ID)
-	log.Printf("   🏷️ Thread ID: %d", update.Message.MessageThreadID)
-	log.Printf("   📊 Тип чата: %s", update.Message.Chat.Type)
-	if update.Message.Chat.Title != "" {
-		log.Printf("   🏷️ Название чата: %s", update.Message.Chat.Title)
+	log.Printf("   👤 От: %s (@%s)", message.From.FirstName, message.From.Username) // Исправлено: message.From.Username
+	log.Printf("   🆔 Chat ID: %d", message.Chat.ID)
+	log.Printf("   🏷️ Thread ID: %d", message.MessageThreadID)
+	log.Printf("   📊 Тип чата: %s", message.Chat.Type)
+	if message.Chat.Title != "" {
+		log.Printf("   🏷️ Название чата: %s", message.Chat.Title)
 	}
 
-	if len(update.Message.Photo) > 0 {
-		log.Printf("   📸 Фото: %d вариантов размера", len(update.Message.Photo))
+	if len(message.Photo) > 0 {
+		log.Printf("   📸 Фото: %d вариантов размера", len(message.Photo))
 		b.handlePhoto(update)
 		return
 	}
 
-	if update.Message.Document.FileID != "" {
-		log.Printf("   📎 Документ: %s", update.Message.Document.FileName)
+	if message.Document.FileID != "" {
+		log.Printf("   📎 Документ: %s", message.Document.FileName)
 		b.handleDocument(update)
 		return
 	}
 
-	if update.Message.Text == "" {
+	if message.Text == "" {
 		log.Printf("   💬 Текст: (пустое сообщение или другой тип)")
 		b.handleOtherMessage(update)
 		return
 	}
 
-	log.Printf("   💬 Текст: %s", update.Message.Text)
+	log.Printf("   💬 Текст: %s", message.Text)
 
-	if update.Message.Text == "/start" {
+	if message.Text == "/start" {
 		b.handleStart(update)
 		return
 	}
 
-	if update.Message.Text == "/help" {
+	if message.Text == "/help" {
 		b.handleHelp(update)
 		return
 	}
 
-	if update.Message.Text == "/features" {
+	if message.Text == "/features" {
 		b.handleFeatures(update)
 		return
 	}
 
-	if update.Message.Text == "/info" {
+	if message.Text == "/info" {
 		b.handleInfo(update)
 		return
 	}
@@ -225,12 +228,13 @@ func (b *Bot) getLargestPhoto(photos []PhotoSize) PhotoSize {
 }
 
 func (b *Bot) handlePhoto(update Update) {
-	chatID := update.Message.Chat.ID
-	threadID := update.Message.MessageThreadID
+	message := update.Message
+	chatID := message.Chat.ID
+	threadID := message.MessageThreadID
 
-	largestPhoto := b.getLargestPhoto(update.Message.Photo)
+	largestPhoto := b.getLargestPhoto(message.Photo)
 
-	message := fmt.Sprintf(`📸 <b>Получено фото!</b>
+	response := fmt.Sprintf(`📸 <b>Получено фото!</b>
 
 🖼️ <b>Информация о фото:</b>
 • 📏 Размер: <b>%d×%d</b> пикселей
@@ -245,20 +249,21 @@ func (b *Bot) handlePhoto(update Update) {
 		largestPhoto.Width,
 		largestPhoto.Height,
 		float64(largestPhoto.FileSize)/1024,
-		largestPhoto.FileID[:20]+"...",
-		b.getCaptionText(update.Message.Caption),
+		largestPhoto.FileID[:min(20, len(largestPhoto.FileID))]+"...",
+		b.getCaptionText(message.Caption),
 	)
 
-	if err := b.sendMessage(chatID, threadID, message); err != nil {
+	if err := b.sendMessage(chatID, threadID, response); err != nil {
 		log.Printf("❌ Ошибка отправки: %v", err)
 	}
 }
 
 func (b *Bot) handleDocument(update Update) {
-	chatID := update.Message.Chat.ID
-	threadID := update.Message.MessageThreadID
+	message := update.Message
+	chatID := message.Chat.ID
+	threadID := message.MessageThreadID
 
-	document := update.Message.Document
+	document := message.Document
 	isJPG := b.isJPGImage(document)
 
 	var status string
@@ -268,7 +273,7 @@ func (b *Bot) handleDocument(update Update) {
 		status = "❌ <b>Это не JPG изображение</b>"
 	}
 
-	message := fmt.Sprintf(`📎 <b>Получен документ!</b>
+	response := fmt.Sprintf(`📎 <b>Получен документ!</b>
 
 📋 <b>Информация о файле:</b>
 • 📝 Имя: <code>%s</code>
@@ -284,21 +289,22 @@ func (b *Bot) handleDocument(update Update) {
 		document.FileName,
 		document.MimeType,
 		float64(document.FileSize)/1024,
-		document.FileID[:20]+"...",
-		b.getCaptionText(update.Message.Caption),
+		document.FileID[:min(20, len(document.FileID))]+"...",
+		b.getCaptionText(message.Caption),
 		status,
 	)
 
-	if err := b.sendMessage(chatID, threadID, message); err != nil {
+	if err := b.sendMessage(chatID, threadID, response); err != nil {
 		log.Printf("❌ Ошибка отправки: %v", err)
 	}
 }
 
 func (b *Bot) handleOtherMessage(update Update) {
-	chatID := update.Message.Chat.ID
-	threadID := update.Message.MessageThreadID
+	message := update.Message
+	chatID := message.Chat.ID
+	threadID := message.MessageThreadID
 
-	message := `🔮 <b>Получено сообщение другого типа!</b>
+	response := `🔮 <b>Получено сообщение другого типа!</b>
 
 📊 <b>Информация:</b>
 • Тип: Не текстовое сообщение
@@ -311,7 +317,7 @@ func (b *Bot) handleOtherMessage(update Update) {
 
 🎯 <i>Используйте /help для получения списка команд</i>`
 
-	if err := b.sendMessage(chatID, threadID, message); err != nil {
+	if err := b.sendMessage(chatID, threadID, response); err != nil {
 		log.Printf("❌ Ошибка отправки: %v", err)
 	}
 }
@@ -324,10 +330,11 @@ func (b *Bot) getCaptionText(caption string) string {
 }
 
 func (b *Bot) handleStart(update Update) {
-	chatID := update.Message.Chat.ID
-	threadID := update.Message.MessageThreadID
+	message := update.Message
+	chatID := message.Chat.ID
+	threadID := message.MessageThreadID
 
-	message := fmt.Sprintf(`🎉 <b>Добро пожаловать, %s!</b>
+	response := fmt.Sprintf(`🎉 <b>Добро пожаловать, %s!</b>
 
 🤖 <b>Я - умный Telegram бот с различными возможностями</b>
 
@@ -361,24 +368,25 @@ func (b *Bot) handleStart(update Update) {
 • 🏷️ ID топика: <code>%d</code>
 
 💡 <b>Просто отправьте мне фото или документ для проверки!</b>`,
-		update.Message.From.FirstName,
+		message.From.FirstName,
 		b.config.MaxLengthAPIOutput,
-		update.Message.From.FirstName,
-		update.Message.From.ID,
+		message.From.FirstName,
+		message.From.ID,
 		chatID,
 		threadID,
 	)
 
-	if err := b.sendMessage(chatID, threadID, message); err != nil {
+	if err := b.sendMessage(chatID, threadID, response); err != nil {
 		log.Printf("❌ Ошибка отправки: %v", err)
 	}
 }
 
 func (b *Bot) handleHelp(update Update) {
-	chatID := update.Message.Chat.ID
-	threadID := update.Message.MessageThreadID
+	message := update.Message
+	chatID := message.Chat.ID
+	threadID := message.MessageThreadID
 
-	message := `🆘 <b>Помощь по боту</b>
+	response := `🆘 <b>Помощь по боту</b>
 
 📚 <b>Доступные команды:</b>
 • /start - начать работу с ботом
@@ -407,18 +415,19 @@ func (b *Bot) handleHelp(update Update) {
 
 💡 <b>Совет:</b> Используйте /features чтобы узнать о всех возможностях!`
 
-	message = fmt.Sprintf(message, b.config.MaxLengthAPIOutput)
+	response = fmt.Sprintf(response, b.config.MaxLengthAPIOutput)
 
-	if err := b.sendMessage(chatID, threadID, message); err != nil {
+	if err := b.sendMessage(chatID, threadID, response); err != nil {
 		log.Printf("❌ Ошибка отправки: %v", err)
 	}
 }
 
 func (b *Bot) handleFeatures(update Update) {
-	chatID := update.Message.Chat.ID
-	threadID := update.Message.MessageThreadID
+	message := update.Message
+	chatID := message.Chat.ID
+	threadID := message.MessageThreadID
 
-	message := `🚀 <b>Возможности бота</b>
+	response := `🚀 <b>Возможности бота</b>
 
 🎯 <b>Основные функции:</b>
 • <b>Умные ответы</b> - Анализирую ваши сообщения и отвечаю соответствующим образом
@@ -457,19 +466,20 @@ func (b *Bot) handleFeatures(update Update) {
 
 💡 <b>Напишите любое сообщение, чтобы протестировать мои возможности!</b>`
 
-	message = fmt.Sprintf(message, b.config.MaxLengthAPIOutput, b.config.MaxLengthAPIOutput)
+	response = fmt.Sprintf(response, b.config.MaxLengthAPIOutput, b.config.MaxLengthAPIOutput)
 
-	if err := b.sendMessage(chatID, threadID, message); err != nil {
+	if err := b.sendMessage(chatID, threadID, response); err != nil {
 		log.Printf("❌ Ошибка отправки: %v", err)
 	}
 }
 
 func (b *Bot) handleInfo(update Update) {
-	chatID := update.Message.Chat.ID
-	threadID := update.Message.MessageThreadID
+	message := update.Message
+	chatID := message.Chat.ID
+	threadID := message.MessageThreadID
 
 	chatType := "Неизвестный"
-	switch update.Message.Chat.Type {
+	switch message.Chat.Type {
 	case "private":
 		chatType = "💬 Личные сообщения"
 	case "group":
@@ -485,7 +495,7 @@ func (b *Bot) handleInfo(update Update) {
 		topicStatus = fmt.Sprintf("✅ Да (ID: %d)", threadID)
 	}
 
-	message := fmt.Sprintf(`ℹ️ <b>Информация о чате</b>
+	response := fmt.Sprintf(`ℹ️ <b>Информация о чате</b>
 
 📋 <b>Основная информация:</b>
 • 💬 Тип чата: <b>%s</b>
@@ -507,26 +517,27 @@ func (b *Bot) handleInfo(update Update) {
 💡 <b>Примечание:</b>
 Этот бот специально разработан для работы с топиками в Telegram группах и всегда отвечает в том же разделе, откуда пришло сообщение.`,
 		chatType,
-		b.getChatTitle(update.Message.Chat),
+		b.getChatTitle(message.Chat),
 		chatID,
 		topicStatus,
-		update.Message.From.FirstName,
-		update.Message.From.Username,
-		update.Message.From.ID,
+		message.From.FirstName,
+		message.From.Username, // Исправлено: message.From.Username
+		message.From.ID,
 		b.getBotUsername(),
 		b.config.MaxLengthAPIOutput,
 	)
 
-	if err := b.sendMessage(chatID, threadID, message); err != nil {
+	if err := b.sendMessage(chatID, threadID, response); err != nil {
 		log.Printf("❌ Ошибка отправки: %v", err)
 	}
 }
 
 func (b *Bot) handleRegularMessage(update Update) {
-	chatID := update.Message.Chat.ID
-	threadID := update.Message.MessageThreadID
+	message := update.Message
+	chatID := message.Chat.ID
+	threadID := message.MessageThreadID
 
-	message := fmt.Sprintf(`✅ <b>Сообщение получено!</b>
+	response := fmt.Sprintf(`✅ <b>Сообщение получено!</b>
 
 📝 <b>Ваше сообщение:</b>
 <code>%s</code>
@@ -544,15 +555,15 @@ func (b *Bot) handleRegularMessage(update Update) {
 • Команду /features - все возможности
 
 🎯 <i>Этот ответ отправлен в тот же топик!</i>`,
-		update.Message.Text,
-		update.Message.From.FirstName,
-		update.Message.From.Username,
+		message.Text,
+		message.From.FirstName,
+		message.From.Username, // Исправлено: message.From.Username
 		chatID,
 		threadID,
 		b.config.MaxLengthAPIOutput,
 	)
 
-	if err := b.sendMessage(chatID, threadID, message); err != nil {
+	if err := b.sendMessage(chatID, threadID, response); err != nil {
 		log.Printf("❌ Ошибка отправки: %v", err)
 	}
 }
