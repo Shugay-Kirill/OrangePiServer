@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 type Bot struct {
@@ -285,6 +286,21 @@ func (b *Bot) isJPGImage(document Document) bool {
 	return false
 }
 
+// getLargestPhoto возвращает фото наибольшего размера из массива
+func (b *Bot) getLargestPhoto(photos []PhotoSize) PhotoSize {
+	if len(photos) == 0 {
+		return PhotoSize{}
+	}
+
+	largest := photos[0]
+	for _, photo := range photos {
+		if photo.FileSize > largest.FileSize {
+			largest = photo
+		}
+	}
+	return largest
+}
+
 func (b *Bot) handlePhoto(update Update) {
 	chatID := update.Message.Chat.ID
 	threadID := update.Message.MessageThreadID
@@ -314,6 +330,14 @@ func (b *Bot) handlePhoto(update Update) {
 	if err := b.sendMessage(chatID, threadID, message); err != nil {
 		log.Printf("❌ Ошибка отправки: %v", err)
 	}
+}
+
+// getCaptionText возвращает текст подписи или сообщение об отсутствии
+func (b *Bot) getCaptionText(caption string) string {
+	if caption == "" {
+		return "<i>нет подписи</i>"
+	}
+	return caption
 }
 
 func (b *Bot) handleDocument(update Update) {
