@@ -26,6 +26,10 @@ type Message struct {
 	Text      string `json:"text"`
 	// Прямое извлечение message_thread_id из JSON
 	MessageThreadID int `json:"message_thread_id"`
+	// Поля для работы с фото
+	Photo    []PhotoSize `json:"photo"`
+	Document Document    `json:"document"`
+	Caption  string      `json:"caption"`
 }
 
 type User struct {
@@ -38,6 +42,23 @@ type Chat struct {
 	ID    int64  `json:"id"`
 	Type  string `json:"type"`
 	Title string `json:"title"`
+}
+
+type PhotoSize struct {
+	FileID       string `json:"file_id"`
+	FileUniqueID string `json:"file_unique_id"`
+	Width        int    `json:"width"`
+	Height       int    `json:"height"`
+	FileSize     int    `json:"file_size"`
+}
+
+type Document struct {
+	FileID       string    `json:"file_id"`
+	FileUniqueID string    `json:"file_unique_id"`
+	Thumbnail    PhotoSize `json:"thumb"`
+	FileName     string    `json:"file_name"`
+	MimeType     string    `json:"mime_type"`
+	FileSize     int       `json:"file_size"`
 }
 
 func NewBot(config *Config) *Bot {
@@ -80,9 +101,9 @@ func (b *Bot) getUpdates(offset int) ([]Update, error) {
 	}
 
 	// Логируем сырой ответ для отладки
-	maxLength := 5000
+	maxLengthMessegeAPI := 5000
 	if len(body) > 0 {
-		log.Printf("📨 Получен ответ от API: %s", string(body)[:min(maxLength, len(body))])
+		log.Printf("📨 Получен ответ от API: %s", string(body)[:min(maxLengthMessegeAPI, len(body))])
 	}
 
 	var response struct {
