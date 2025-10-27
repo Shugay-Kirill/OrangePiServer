@@ -70,8 +70,9 @@ func (h *MessageHandler) HandleTextMessage(update models.Update) {
 		h.HandleFeaturesCommand(update)
 	case "/info":
 		h.HandleInfoCommand(update)
-	default:
+	case "/infoMessage":
 		h.HandleRegularMessage(update)
+	default:
 	}
 }
 
