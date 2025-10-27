@@ -52,6 +52,8 @@ func (h *MessageHandler) HandleUpdate(update models.Update) {
 	case message.Text == "":
 		log.Printf("   💬 Текст: (пустое сообщение или другой тип)")
 		h.HandleOtherMessage(update)
+	case message.MessageThreadID == 29:
+		log.Printf("   💬 Это чат Наши фотографии")
 	default:
 		log.Printf("   💬 Текст: %s", message.Text)
 		h.HandleTextMessage(update)
