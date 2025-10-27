@@ -1,8 +1,6 @@
 package models
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // Структуры для Telegram API
 type Update struct {
