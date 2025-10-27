@@ -32,30 +32,30 @@ func (h *MessageHandler) HandleUpdate(update models.Update) {
 	message := update.Message
 
 	log.Printf("📩 Получено сообщение:")
-	log.Printf("   👤 От: %s (@%s)", message.From.FirstName, message.From.Username)
-	log.Printf("   🆔 Chat ID: %d", message.Chat.ID)
-	log.Printf("   🏷️ Thread ID: %d", message.MessageThreadID)
-	log.Printf("   📊 Тип чата: %s", message.Chat.Type)
+	log.Printf("   	👤 От: %s (@%s)", message.From.FirstName, message.From.Username)
+	log.Printf("   	🆔 Chat ID: %d", message.Chat.ID)
+	log.Printf("   	🏷️ Thread ID: %d", message.MessageThreadID)
+	log.Printf("   	📊 Тип чата: %s", message.Chat.Type)
 
 	if message.Chat.Title != "" {
-		log.Printf("   🏷️ Название чата: %s", message.Chat.Title)
+		log.Printf("   	🏷️ Название чата: %s", message.Chat.Title)
 	}
 
 	// Определяем тип сообщения и передаем соответствующему обработчику
 	switch {
 	case len(message.Photo) > 0:
-		log.Printf("   📸 Фото: %d вариантов размера", len(message.Photo))
+		log.Printf("   	📸 Фото: %d вариантов размера", len(message.Photo))
 		h.HandlePhoto(update)
 	case message.Document.FileID != "":
-		log.Printf("   📎 Документ: %s", message.Document.FileName)
+		log.Printf("   	📎 Документ: %s", message.Document.FileName)
 		h.HandleDocument(update)
 	case message.Text == "":
-		log.Printf("   💬 Текст: (пустое сообщение или другой тип)")
+		log.Printf("   	💬 Текст: (пустое сообщение или другой тип)")
 		h.HandleOtherMessage(update)
 	case message.MessageThreadID == 29:
-		log.Printf("   💬 Это чат Наши фотографии")
+		log.Printf("   		💬 Это чат Наши фотографии")
 	default:
-		log.Printf("   💬 Текст: %s", message.Text)
+		log.Printf("   	💬 Текст: %s", message.Text)
 		h.HandleTextMessage(update)
 	}
 }
