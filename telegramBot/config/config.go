@@ -11,6 +11,8 @@ type Config struct {
 	TelegramToken      string
 	Debug              bool
 	MaxLengthAPIOutput int
+	YandexDiskToken    string
+	UrlYandexDisk      string
 }
 
 func LoadConfig() *Config {
@@ -20,6 +22,8 @@ func LoadConfig() *Config {
 		TelegramToken:      getEnv("TELEGRAM_BOT_TOKEN", ""),
 		Debug:              getEnvAsBool("DEBUG", false),
 		MaxLengthAPIOutput: getEnvAsInt("MAX_LENGTH_MESSEGE_API", 200),
+		YandexDiskToken:    getEnv("YANDEX_DISK_TOKEN", ""),
+		UrlYandexDisk:      getEnv("YANDEX_DISK_URL", "https://cloud-api.yandex.net/v1/disk"),
 	}
 }
 

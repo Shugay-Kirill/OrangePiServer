@@ -45,10 +45,10 @@ func (h *MessageHandler) HandleUpdate(update models.Update) {
 	switch {
 	case len(message.Photo) > 0:
 		log.Printf("   	📸 Фото: %d вариантов размера", len(message.Photo))
-		h.HandlePhoto(update)
+		// h.HandlePhoto(update)
 	case message.Document.FileID != "":
 		log.Printf("   	📎 Документ: %s", message.Document.FileName)
-		h.HandleDocument(update)
+		// h.HandleDocument(update)
 	case message.Text == "":
 		log.Printf("   	💬 Текст: (пустое сообщение или другой тип)")
 		h.HandleOtherMessage(update)

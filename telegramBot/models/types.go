@@ -1,6 +1,9 @@
 package models
 
-import "fmt"
+import (
+// "fmt"
+// "net/http"
+)
 
 // Структуры для Telegram API
 type Update struct {
@@ -48,48 +51,15 @@ type Document struct {
 	FileSize     int       `json:"file_size"`
 }
 
-// Структуры для внешнего API
-type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-}
+// Структура для APIYandexDisk
+// type YandexDiskAPI struct {
+// 	hostNameURL string
+// 	token       string
+// 	client      *http.Client
+// }
 
-type FileAnalysisRequest struct {
-	FileName string `json:"file_name"`
-	MimeType string `json:"mime_type"`
-	FileSize int    `json:"file_size"`
-}
-
-type FileAnalysisResponse struct {
-	IsJPG      bool   `json:"is_jpg"`
-	FileType   string `json:"file_type"`
-	Dimensions string `json:"dimensions,omitempty"`
-	FileSizeKB string `json:"file_size_kb"`
-}
-
-// Конвертер для API
-func (d *Document) ToFileAnalysisRequest() FileAnalysisRequest {
-	return FileAnalysisRequest{
-		FileName: d.FileName,
-		MimeType: d.MimeType,
-		FileSize: d.FileSize,
-	}
-}
-
-func (p *PhotoSize) ToFileAnalysisResponse() FileAnalysisResponse {
-	return FileAnalysisResponse{
-		IsJPG:      true,
-		FileType:   "image/jpeg",
-		Dimensions: formatDimensions(p.Width, p.Height),
-		FileSizeKB: formatFileSize(p.FileSize),
-	}
-}
-
-func formatDimensions(width, height int) string {
-	return fmt.Sprintf("%dx%d", width, height)
-}
-
-func formatFileSize(size int) string {
-	return fmt.Sprintf("%.2f KB", float64(size)/1024)
-}
+// type DiskInfo struct {
+// 	TotalSpace int64 `json:"total_space"`
+// 	UsedSpace  int64 `json:"used_space"`
+// 	TrashSize  int64 `json:"trash_size"`
+// }
