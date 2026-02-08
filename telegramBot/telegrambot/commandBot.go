@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"telegramBot/models"
+	// "telegramBot/yandexapi"
 )
 
 func (h *MessageHandler) HandleStartCommand(update models.Update) {
@@ -115,6 +116,26 @@ func (h *MessageHandler) HandleInfoCommand(update models.Update) {
 		topicStatus,
 		h.Config.MaxLengthAPIOutput,
 	)
+
+	h.SendMessage(message.Chat.ID, message.MessageThreadID, response)
+}
+
+func (h *MessageHandler) HandleInfoDiskCommand(update models.Update) {
+	message := update.Message
+	info, err := h.yandexAPI.PrintDiskUsage()
+
+	// if (err == nil) {
+	// 	response := fmt.Println("%s", infiDisk)
+	// }
+	// else {
+
+	// }
+	if err != nil { /* используем err */
+	}
+	fmt.Println(info)
+
+	response := fmt.Sprintf(`dsa`)
+	// }
 
 	h.SendMessage(message.Chat.ID, message.MessageThreadID, response)
 }

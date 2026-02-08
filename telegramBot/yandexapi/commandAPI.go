@@ -104,19 +104,26 @@ func (api *YandexAPI) PrintDirectoryContents(path string) error {
 }
 
 // PrintDiskUsage выводит информацию о использовании диска
-func (api *YandexAPI) PrintDiskUsage() error {
+func (api *YandexAPI) PrintDiskUsage() (string, error) {
 	info, err := GetDiskInfo(api.yaapi)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	fmt.Println("💾 Yandex.Disk Usage:")
-	fmt.Println("├── Total Space:", formatBytes(info.TotalSpace))
-	fmt.Println("├── Used Space: ", formatBytes(info.UsedSpace))
-	fmt.Println("└── Free Space: ", formatBytes(info.TotalSpace-info.UsedSpace))
-
 	usagePercent := float64(info.UsedSpace) / float64(info.TotalSpace) * 100
-	fmt.Printf("Usage: %.1f%%\n", usagePercent)
+	// fmt.Printf("Usage: %.1f%%\n", usagePercent)
 
-	return nil
+	result := fmt.Sprintf(`
+💾 Yandex.Disk Usage:
+├── Total Space: %s
+├── Used Space: %s
+└── Free Space: %s
+Usage: %.1f%%`,
+		formatBytes(info.TotalSpace),
+		formatBytes(info.UsedSpace),
+		formatBytes(info.TotalSpace-info.UsedSpace),
+		usagePercent,
+	)
+
+	return result, nil
 }

@@ -10,11 +10,13 @@ import (
 
 	"telegramBot/config"
 	"telegramBot/models"
+	"telegramBot/yandexapi"
 )
 
 type MessageHandler struct {
-	Token  string
-	Config *config.Config
+	Token     string
+	Config    *config.Config
+	yandexAPI *yandexapi.YandexAPI
 }
 
 func NewMessageHandler(token string, config *config.Config) *MessageHandler {
@@ -74,6 +76,8 @@ func (h *MessageHandler) HandleTextMessage(update models.Update) {
 		h.HandleInfoCommand(update)
 	case "/infoMessage":
 		h.HandleRegularMessage(update)
+	case "/infoDisk":
+		h.HandleInfoDiskCommand(update)
 	default:
 	}
 }
