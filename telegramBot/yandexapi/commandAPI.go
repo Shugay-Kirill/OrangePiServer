@@ -64,7 +64,7 @@ func DeleteDirectory(pathDirectory string, nameDirectory string) error {
 }
 
 // Вспомогательная функция для форматирования байтов
-func formatBytes(bytes int64) string {
+func FormatBytes(bytes int64) string {
 	if bytes == 0 {
 		return "0 B"
 	}
@@ -82,10 +82,10 @@ func formatBytes(bytes int64) string {
 }
 
 // PrintDirectoryContents выводит содержимое директории
-func PrintDirectoryContents(pathDirectory string) error {
+func PrintDirectoryContents(pathDirectory string) ([]map[string]interface{}, error) {
 	files, err := method.GetResources(pathDirectory)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	fmt.Printf("📁 Contents of '%s':\n", pathDirectory)
@@ -98,16 +98,15 @@ func PrintDirectoryContents(pathDirectory string) error {
 		if fileType == "file" {
 			size, _ := file["size"].(float64)
 			path, _ := file["path"].(string)
-			fmt.Printf("📄 %-30s %10s %s\n", name, formatBytes(int64(size)), path)
+			fmt.Printf("📄 %-30s %10s %s\n", name, FormatBytes(int64(size)), path)
 		} else {
 			fmt.Printf("📁 %s/\n", name)
 		}
 	}
-
 	fmt.Println(strings.Repeat("─", 60))
 	fmt.Printf("Total items: %d\n", len(files))
 
-	return nil
+	return files, nil
 }
 
 // PrintDiskUsage выводит информацию о использовании диска
@@ -128,9 +127,9 @@ func PrintDiskUsage() (string, error) {
 ├── Used Space: %s
 └── Free Space: %s
 Usage: %.1f%%`,
-		formatBytes(info.TotalSpace),
-		formatBytes(info.UsedSpace),
-		formatBytes(info.TotalSpace-info.UsedSpace),
+		FormatBytes(info.TotalSpace),
+		FormatBytes(info.UsedSpace),
+		FormatBytes(info.TotalSpace-info.UsedSpace),
 		usagePercent,
 	)
 	fmt.Println("end PrintDiskUsage")

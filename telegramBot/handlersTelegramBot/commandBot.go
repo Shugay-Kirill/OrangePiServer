@@ -3,6 +3,7 @@ package handlersTelegramBot
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"telegramBot/models"
 	"telegramBot/yandexapi"
@@ -196,12 +197,32 @@ func (h *MessageHandler) HandleContentsDirectory(update models.Update) {
 		path := text
 		print("step1. text %s", path)
 
-		err := yandexapi.PrintDirectoryContents(path)
+		files, err := yandexapi.PrintDirectoryContents(path)
+		var builder strings.Builder
+
+		fmt.Fprintf(&builder, "📁 Contents of '%s':\n", path)
+		fmt.Fprintln(&builder, strings.Repeat("─", 20))
+		for _, file := range files {
+			name, _ := file["name"].(string)
+			fileType, _ := file["type"].(string)
+
+			if fileType == "file" {
+				size, _ := file["size"].(float64)
+				fmt.Fprintf(&builder, "📄 %-30s %10s \n", name, yandexapi.FormatBytes(int64(size)))
+			} else {
+				fmt.Fprintf(&builder, "📁 %s/\n", name)
+			}
+		}
 
 		if err != nil {
 			return "", nil, fmt.Errorf("не удалось просмотреть директорию: %w", err)
 		}
-		return "✅ Содержимое директории", nil, nil
+
+		fmt.Fprintf(&builder, (strings.Repeat("─", 20)))
+		fmt.Fprintf(&builder, "\nTotal items: %d\n", len(files))
+		h.SendMessage(chatID, thredID, builder.String())
+
+		return "", nil, nil
 	}
 	h.states.Store(chatID, &UserState{handler: step1})
 }
