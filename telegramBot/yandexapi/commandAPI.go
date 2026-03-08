@@ -5,20 +5,12 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	. "telegramBot/yandexapi/init"
-	. "telegramBot/yandexapi/method"
+
+	"telegramBot/yandexapi/method"
 )
 
-type YandexAPI struct {
-	yaapi *YandexDiskAPI
-}
-
-// func testApi(api *YandexDiskAPI){
-
-// }
-
 // UploadFile читает локальный файл и передает его для загрузки на Яндекс.Диск
-func (api *YandexAPI) UploadFile(remoutePathDirectory string, pathFile string) error {
+func UploadFile(remoutePathDirectory string, pathFile string) error {
 
 	// Проверяем существование файла
 	fileInfo, err := os.Stat(pathFile)
@@ -36,7 +28,7 @@ func (api *YandexAPI) UploadFile(remoutePathDirectory string, pathFile string) e
 	contentType := http.DetectContentType(fileData)
 	fmt.Printf("📄 MIME-тип файла: %s\n", contentType)
 	// Передаем данные файла в PostResourcesUpload для загрузки
-	err = PostResourcesUpload(api.yaapi, remoutePathDirectory, fileData, contentType, fileInfo.Size(), pathFile)
+	err = method.PostResourcesUpload(remoutePathDirectory, fileData, contentType, fileInfo.Size(), pathFile)
 	if err != nil {
 		return fmt.Errorf("ошибка загрузки файла через PostResourcesUpload: %v", err)
 	}
@@ -45,10 +37,25 @@ func (api *YandexAPI) UploadFile(remoutePathDirectory string, pathFile string) e
 	return nil
 }
 
-func (api *YandexAPI) CreateDirectory(pathDirectory string, nameDirectory string) error {
-	directory, err := PutResources(api.yaapi, pathDirectory, nameDirectory)
+// CreateDirectory создание директории
+func CreateDirectory(pathDirectory string, nameDirectory string) error {
+	print("start createDir. pathDirectory = %s, nameDirectory = %s", pathDirectory, nameDirectory)
+	directory, err := method.PutResources(pathDirectory, nameDirectory)
 
-	if err != nil {
+	if err == nil {
+		return err
+	}
+
+	fmt.Printf("\n directory = %s\n", directory)
+	return nil
+}
+
+// CreateDirectory создание директории
+func DeleteDirectory(pathDirectory string, nameDirectory string) error {
+	print("start DelteDirectory. pathDirectory = %s, nameDirectory = %s", pathDirectory, nameDirectory)
+	directory, err := method.DeleteResources(pathDirectory, nameDirectory)
+
+	if err == nil {
 		return err
 	}
 
@@ -75,13 +82,13 @@ func formatBytes(bytes int64) string {
 }
 
 // PrintDirectoryContents выводит содержимое директории
-func (api *YandexAPI) PrintDirectoryContents(path string) error {
-	files, err := GetResources(api.yaapi, path)
+func PrintDirectoryContents(pathDirectory string) error {
+	files, err := method.GetResources(pathDirectory)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("📁 Contents of '%s':\n", path)
+	fmt.Printf("📁 Contents of '%s':\n", pathDirectory)
 	fmt.Println(strings.Repeat("─", 60))
 
 	for _, file := range files {
@@ -104,8 +111,10 @@ func (api *YandexAPI) PrintDirectoryContents(path string) error {
 }
 
 // PrintDiskUsage выводит информацию о использовании диска
-func (api *YandexAPI) PrintDiskUsage() (string, error) {
-	info, err := GetDiskInfo(api.yaapi)
+func PrintDiskUsage() (string, error) {
+	fmt.Println("start PrintDiskUsage")
+
+	info, err := method.GetDiskInfo()
 	if err != nil {
 		return "", err
 	}
@@ -124,6 +133,6 @@ Usage: %.1f%%`,
 		formatBytes(info.TotalSpace-info.UsedSpace),
 		usagePercent,
 	)
-
+	fmt.Println("end PrintDiskUsage")
 	return result, nil
 }

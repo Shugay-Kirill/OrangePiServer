@@ -7,22 +7,30 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 
 	"telegramBot/config"
 	"telegramBot/models"
-	"telegramBot/yandexapi"
 )
 
 type MessageHandler struct {
-	Token     string
-	Config    *config.Config
-	yandexAPI *yandexapi.YandexAPI
+	Token  string
+	Config *config.Config
+	states sync.Map // ключ: chatID (int64), значение: *UserState
+}
+
+type InputHandler func(text string) (response string, next InputHandler, err error)
+
+// UserState хранит текущий обработчик для конкретного чата
+type UserState struct {
+	handler InputHandler
 }
 
 func NewMessageHandler(token string, config *config.Config) *MessageHandler {
 	return &MessageHandler{
 		Token:  token,
 		Config: config,
+		states: sync.Map{},
 	}
 }
 
@@ -64,6 +72,12 @@ func (h *MessageHandler) HandleUpdate(update models.Update) {
 
 func (h *MessageHandler) HandleTextMessage(update models.Update) {
 	message := update.Message
+	chatID := message.Chat.ID
+
+	if stateI, ok := h.states.Load(chatID); ok {
+		h.handleUserInput(update, stateI.(*UserState))
+		return
+	}
 
 	switch message.Text {
 	case "/start":
@@ -78,6 +92,12 @@ func (h *MessageHandler) HandleTextMessage(update models.Update) {
 		h.HandleRegularMessage(update)
 	case "/infoDisk":
 		h.HandleInfoDiskCommand(update)
+	case "/createDir":
+		h.HandleCreateDirectory(update)
+	case "/deleteDir":
+		h.HandleDeleteDirectory(update)
+	case "/contentsDir":
+		h.HandleContentsDirectory(update)
 	default:
 	}
 }
@@ -138,6 +158,41 @@ func (h *MessageHandler) SendMessage(chatID int64, threadID int, text string) er
 
 	log.Printf("✅ Сообщение успешно отправлено!")
 	return nil
+}
+
+func (h *MessageHandler) handleUserInput(update models.Update, state *UserState) {
+	message := update.Message
+	chatID := message.Chat.ID
+	threadID := message.MessageThreadID
+	text := message.Text
+
+	// Проверка отмены
+	if text == "cancel" || text == "/cancel" || text == "отмена" {
+		h.states.Delete(chatID)
+		h.SendMessage(chatID, threadID, "❌ Операция отменена.")
+		return
+	}
+
+	// Вызываем текущий обработчик
+	response, nextHandler, err := state.handler(text)
+	if err != nil {
+		h.states.Delete(chatID)
+		h.SendMessage(chatID, threadID, fmt.Sprintf("❌ Ошибка: %v", err))
+		return
+	}
+
+	// Отправляем ответ пользователю, если есть
+	if response != "" {
+		h.SendMessage(chatID, threadID, response)
+	}
+
+	// Если следующего обработчика нет — диалог завершен
+	if nextHandler == nil {
+		h.states.Delete(chatID)
+	} else {
+		// Иначе обновляем обработчик
+		h.states.Store(chatID, &UserState{handler: nextHandler})
+	}
 }
 
 // Вспомогательные методы

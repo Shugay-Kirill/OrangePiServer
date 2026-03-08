@@ -7,15 +7,14 @@ import (
 	"log"
 	"net/http"
 
-	. "telegramBot/yandexapi/init"
+	"telegramBot/yandexapi/initYD"
 )
 
-// type api struct {
-// 	init *yandexinit.YandexDiskAPI
-// }
-
 // authenticatedRequest выполняет авторизованный запрос , statusCode uint8
-func AuthenticatedRequest(api *YandexDiskAPI, method, url string, body io.Reader) ([]byte, error) {
+func AuthenticatedRequest(method, pathUrl string, parametr map[string]string, body io.Reader) ([]byte, error) {
+
+	apiAuth := initYD.GetYandexDiskAPI()
+	url := BuildURL(pathUrl, parametr)
 
 	requestApi, err := http.NewRequest(method, url, body)
 
@@ -24,7 +23,7 @@ func AuthenticatedRequest(api *YandexDiskAPI, method, url string, body io.Reader
 	}
 
 	// Устанавливаем заголовки авторизации
-	requestApi.Header.Set("Authorization", "OAuth "+api.Token)
+	requestApi.Header.Set("Authorization", "OAuth "+apiAuth.Token)
 	requestApi.Header.Set("Accept", "application/json")
 	if body != nil && method == "PUT" {
 		requestApi.Header.Set("Content-Type", "application/octet-stream")
@@ -35,7 +34,7 @@ func AuthenticatedRequest(api *YandexDiskAPI, method, url string, body io.Reader
 
 	log.Printf("🔗 Making %s request to: %s", method, url)
 
-	responseApi, err := api.Client.Do(requestApi)
+	responseApi, err := apiAuth.Client.Do(requestApi)
 	if err != nil {
 		return nil, err
 	}

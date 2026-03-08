@@ -4,21 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 
-	. "telegramBot/yandexapi/authenticated"
-	. "telegramBot/yandexapi/init"
+	"telegramBot/yandexapi/authenticated"
 )
 
 // GetResources возвращает список файлов в указанной директории
-func GetResources(api *YandexDiskAPI, path string) ([]map[string]interface{}, error) {
+func GetResources(pathDirectory string) ([]map[string]interface{}, error) {
 	params := map[string]string{
-		"path":  "testApi",
-		"files": "name,path,type",
+		"path": pathDirectory,
+		// "fields": "name,path,type",
 		"limit": "1000",
 	}
 
-	url := BuildURL(api, "/resources", params)
-
-	body, err := AuthenticatedRequest(api, "GET", url, nil)
+	body, err := authenticated.AuthenticatedRequest("GET", "/resources", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -28,6 +25,7 @@ func GetResources(api *YandexDiskAPI, path string) ([]map[string]interface{}, er
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("GetResources. BODY: %s", result)
 
 	embedded, ok := result["_embedded"].(map[string]interface{})
 	if !ok {

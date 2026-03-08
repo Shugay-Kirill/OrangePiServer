@@ -9,7 +9,7 @@ import (
 
 	"telegramBot/config"
 	"telegramBot/models"
-	"telegramBot/yandexapi/init"
+	// "telegramBot/yandexapi/init"
 )
 
 type Bot struct {
@@ -119,7 +119,7 @@ func StartTelegramBot() {
 		log.Fatal("❌ Неверный токен бота")
 	}
 
-	yandexinit.InitYandexDisk()
+	// yandexinit.InitYandexDisk()
 
 	log.Println("✨ Бот запущен!")
 	bot.startPolling()

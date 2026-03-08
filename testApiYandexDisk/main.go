@@ -172,7 +172,7 @@ func (api *YandexDiskAPI) GetDiskInfo() (*DiskInfo, error) {
 // GetResources возвращает список файлов в указанной директории
 func (api *YandexDiskAPI) GetResources(path string) ([]map[string]interface{}, error) {
 	params := map[string]string{
-		"path":  "testApi",
+		"path":  path,
 		"files": "name,path,type",
 		"limit": "1000",
 	}
@@ -427,7 +427,7 @@ func main() {
 	// }
 
 	// Загрузка файла
-	err := api.UploadFile("testApi", "uploadTestApi.txt")
+	err := api.PrintDirectoryContents("/testApi")
 	if err != nil {
 		log.Fatalf("❌ Error upload file: %v", err)
 	}

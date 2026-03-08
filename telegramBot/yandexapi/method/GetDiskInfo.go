@@ -1,9 +1,10 @@
 package method
 
 import (
+	"fmt"
+
 	"encoding/json"
-	. "telegramBot/yandexapi/authenticated"
-	. "telegramBot/yandexapi/init"
+	"telegramBot/yandexapi/authenticated"
 )
 
 type DiskInfo struct {
@@ -13,9 +14,9 @@ type DiskInfo struct {
 }
 
 // // GetDiskInfo получает информацию о диске
-func GetDiskInfo(api *YandexDiskAPI) (*DiskInfo, error) {
-	url := BuildURL(api, "", nil)
-	body, err := AuthenticatedRequest(api, "GET", url, nil)
+func GetDiskInfo() (*DiskInfo, error) {
+	fmt.Println("start GetDiskInfo")
+	body, err := authenticated.AuthenticatedRequest("GET", "", nil, nil)
 	if err != nil {
 		return nil, err
 	}

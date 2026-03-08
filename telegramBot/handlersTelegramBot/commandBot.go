@@ -2,9 +2,10 @@ package handlersTelegramBot
 
 import (
 	"fmt"
+	"log"
 
 	"telegramBot/models"
-	// "telegramBot/yandexapi"
+	"telegramBot/yandexapi"
 )
 
 func (h *MessageHandler) HandleStartCommand(update models.Update) {
@@ -122,20 +123,85 @@ func (h *MessageHandler) HandleInfoCommand(update models.Update) {
 
 func (h *MessageHandler) HandleInfoDiskCommand(update models.Update) {
 	message := update.Message
-	info, err := h.yandexAPI.PrintDiskUsage()
 
-	// if (err == nil) {
-	// 	response := fmt.Println("%s", infiDisk)
-	// }
-	// else {
+	info, err := yandexapi.PrintDiskUsage()
 
-	// }
-	if err != nil { /* используем err */
+	if err != nil {
+		log.Printf("ERROR PrintDiskUsage: %v", err)
+		response := fmt.Sprintf("❌ Ошибка получения информации о диске: %v", err)
+		h.SendMessage(message.Chat.ID, message.MessageThreadID, response)
+		return
 	}
+
 	fmt.Println(info)
-
-	response := fmt.Sprintf(`dsa`)
-	// }
-
+	response := fmt.Sprintf(info)
 	h.SendMessage(message.Chat.ID, message.MessageThreadID, response)
+}
+
+func (h *MessageHandler) HandleCreateDirectory(update models.Update) {
+	message := update.Message
+	chatID := message.Chat.ID
+	thredID := message.MessageThreadID
+
+	h.SendMessage(chatID, thredID, "📁 Введите путь для создания директории (например, /photos):")
+	step1 := func(text string) (string, InputHandler, error) {
+		path := text
+		print("step1. text %s", path)
+
+		step2 := func(name string) (string, InputHandler, error) {
+			print("step2. name %s", name)
+			err := yandexapi.CreateDirectory(path, name)
+
+			if err != nil {
+				return "", nil, fmt.Errorf("не удалось создать директорию: %w", err)
+			}
+			return "✅ Директория успешно создана!", nil, nil
+		}
+		return "📁 Введите имя новой директории:", step2, nil
+	}
+	h.states.Store(chatID, &UserState{handler: step1})
+}
+
+func (h *MessageHandler) HandleDeleteDirectory(update models.Update) {
+	message := update.Message
+	chatID := message.Chat.ID
+	thredID := message.MessageThreadID
+
+	h.SendMessage(chatID, thredID, "📁 Введите путь для удаления директории (например, /photos):")
+	step1 := func(text string) (string, InputHandler, error) {
+		path := text
+		print("step1. text %s", path)
+
+		step2 := func(name string) (string, InputHandler, error) {
+			print("step2. name %s", name)
+			err := yandexapi.DeleteDirectory(path, name)
+
+			if err != nil {
+				return "", nil, fmt.Errorf("не удалось удалить директорию: %w", err)
+			}
+			return "✅ Директория успешно удалена!", nil, nil
+		}
+		return "📁 Введите имя директории для удаления:", step2, nil
+	}
+	h.states.Store(chatID, &UserState{handler: step1})
+}
+
+func (h *MessageHandler) HandleContentsDirectory(update models.Update) {
+	message := update.Message
+	chatID := message.Chat.ID
+	thredID := message.MessageThreadID
+
+	h.SendMessage(chatID, thredID, "📁 Введите путь для просмотра содержимого директории (например, /photos):")
+	step1 := func(text string) (string, InputHandler, error) {
+		path := text
+		print("step1. text %s", path)
+
+		err := yandexapi.PrintDirectoryContents(path)
+
+		if err != nil {
+			return "", nil, fmt.Errorf("не удалось просмотреть директорию: %w", err)
+		}
+		return "✅ Содержимое директории", nil, nil
+	}
+	h.states.Store(chatID, &UserState{handler: step1})
 }

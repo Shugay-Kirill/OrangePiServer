@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"fmt"
 
-	. "telegramBot/yandexapi/authenticated"
-	. "telegramBot/yandexapi/init"
+	"telegramBot/yandexapi/authenticated"
 )
 
 // PostResourcesUpload загружает файл на Яндекс.Диск
-func PostResourcesUpload(api *YandexDiskAPI, remotePathDirectory string, fileData []byte, contentType string, fileSize int64, fileName string) error {
+func PostResourcesUpload(remotePathDirectory string, fileData []byte, contentType string, fileSize int64, fileName string) error {
 
-	uploadURL, err := GetResourcesUpload(api, remotePathDirectory, fileName)
+	uploadURL, err := GetResourcesUpload(remotePathDirectory, fileName)
 	if err != nil {
 		return fmt.Errorf("ошибка получения upload URL: %v", err)
 	}
@@ -23,7 +22,7 @@ func PostResourcesUpload(api *YandexDiskAPI, remotePathDirectory string, fileDat
 	reader := bytes.NewReader(fileData)
 
 	// Используем authenticatedRequest для загрузки файла (PUT запрос)
-	responseBody, err := AuthenticatedRequest(api, "PUT", uploadURL, reader)
+	responseBody, err := authenticated.AuthenticatedRequest("PUT", uploadURL, nil, reader)
 	if err != nil {
 		return fmt.Errorf("ошибка загрузки файла через authenticatedRequest: %v", err)
 	}

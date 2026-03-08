@@ -4,21 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 
-	. "telegramBot/yandexapi/authenticated"
-	. "telegramBot/yandexapi/init"
+	"telegramBot/yandexapi/authenticated"
 )
 
 // GetResourcesUpload получает URL для загрузки файла на Яндекс.Диск
-func GetResourcesUpload(api *YandexDiskAPI, remotePathDirectory string, fileName string) (string, error) {
+func GetResourcesUpload(remotePathDirectory string, fileName string) (string, error) {
 	params := map[string]string{
 		"path": remotePathDirectory + "/" + fileName,
 	}
 
-	url := BuildURL(api, "/resources/upload", params)
-
 	fmt.Printf("🔗 Запрос GET upload URL для: %s\n", remotePathDirectory)
 
-	body, err := AuthenticatedRequest(api, "GET", url, nil)
+	body, err := authenticated.AuthenticatedRequest("GET", "/resources/upload", params, nil)
 	if err != nil {
 		return "", fmt.Errorf("ошибка получения upload URL: %v", err)
 	}

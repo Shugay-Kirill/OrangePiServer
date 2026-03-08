@@ -6,13 +6,14 @@ import (
 	. "telegramBot/yandexapi/authenticated"
 )
 
-func PutResources(pathDirectory string, nameDirectory string) (map[string]interface{}, error) {
+func DeleteResources(pathDirectory string, nameDirectory string) (map[string]interface{}, error) {
 
 	params := map[string]string{
-		"path": pathDirectory + "/" + nameDirectory,
+		"path":        pathDirectory + "/" + nameDirectory,
+		"permanently": "false",
 	}
 
-	body, err := AuthenticatedRequest("PUT", "/resources", params, nil)
+	body, err := AuthenticatedRequest("DELETE", "/resources", params, nil)
 	if err != nil {
 		return nil, err
 	}
