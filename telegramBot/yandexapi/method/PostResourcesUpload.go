@@ -22,7 +22,7 @@ func PostResourcesUpload(remotePathDirectory string, fileData []byte, contentTyp
 	reader := bytes.NewReader(fileData)
 
 	// Используем authenticatedRequest для загрузки файла (PUT запрос)
-	responseBody, err := authenticated.AuthenticatedRequest("PUT", uploadURL, nil, reader)
+	responseBody, err := authenticated.AuthenticatedRequest("POST", uploadURL, nil, reader)
 	if err != nil {
 		return fmt.Errorf("ошибка загрузки файла через authenticatedRequest: %v", err)
 	}

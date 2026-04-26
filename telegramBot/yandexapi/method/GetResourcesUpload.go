@@ -13,7 +13,7 @@ func GetResourcesUpload(remotePathDirectory string, fileName string) (string, er
 		"path": remotePathDirectory + "/" + fileName,
 	}
 
-	fmt.Printf("🔗 Запрос GET upload URL для: %s\n", remotePathDirectory)
+	fmt.Printf("🔗 Запрос GET upload URL для: %s\n", remotePathDirectory+"/"+fileName)
 
 	body, err := authenticated.AuthenticatedRequest("GET", "/resources/upload", params, nil)
 	if err != nil {

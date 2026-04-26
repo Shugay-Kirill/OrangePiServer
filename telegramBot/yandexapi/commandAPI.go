@@ -3,37 +3,26 @@ package yandexapi
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"telegramBot/yandexapi/method"
 )
 
 // UploadFile читает локальный файл и передает его для загрузки на Яндекс.Диск
-func UploadFile(remoutePathDirectory string, pathFile string) error {
-
-	// Проверяем существование файла
-	fileInfo, err := os.Stat(pathFile)
-	if os.IsNotExist(err) {
-		return fmt.Errorf("файл не существует: %s", pathFile)
-	}
-	fmt.Printf("📖 Чтение файла: %s (%d bytes)\n", pathFile, fileInfo.Size())
-	// Читаем файл в память
-	fileData, err := os.ReadFile(pathFile)
-	if err != nil {
-		return fmt.Errorf("ошибка чтения файла: %v", err)
-	}
-
-	// Получаем MIME-тип файла
+func UploadFile(remotePathDirectory string, fileName string, fileData []byte) error {
+	// Получаем MIME-тип из данных
 	contentType := http.DetectContentType(fileData)
-	fmt.Printf("📄 MIME-тип файла: %s\n", contentType)
-	// Передаем данные файла в PostResourcesUpload для загрузки
-	err = method.PostResourcesUpload(remoutePathDirectory, fileData, contentType, fileInfo.Size(), pathFile)
+	fileSize := int64(len(fileData))
+
+	fmt.Printf("📤 Загрузка файла: %s (%d байт, %s)\n", fileName, fileSize, contentType)
+
+	// Вызываем вашу функцию PostResourcesUpload (она должна быть адаптирована под []byte)
+	err := method.PostResourcesUpload(remotePathDirectory, fileData, contentType, fileSize, fileName)
 	if err != nil {
 		return fmt.Errorf("ошибка загрузки файла через PostResourcesUpload: %v", err)
 	}
 
-	fmt.Printf("✅ Файл успешно передан для загрузки: %s → %s\n", pathFile, remoutePathDirectory)
+	fmt.Printf("✅ Файл успешно загружен: %s → %s\n", fileName, remotePathDirectory)
 	return nil
 }
 
@@ -61,24 +50,6 @@ func DeleteDirectory(pathDirectory string, nameDirectory string) error {
 
 	fmt.Printf("\n directory = %s\n", directory)
 	return nil
-}
-
-// Вспомогательная функция для форматирования байтов
-func FormatBytes(bytes int64) string {
-	if bytes == 0 {
-		return "0 B"
-	}
-
-	sizes := []string{"B", "KB", "MB", "GB", "TB"}
-	i := 0
-	size := float64(bytes)
-
-	for size >= 1024 && i < len(sizes)-1 {
-		size /= 1024
-		i++
-	}
-
-	return fmt.Sprintf("%.1f %s", size, sizes[i])
 }
 
 // PrintDirectoryContents выводит содержимое директории
@@ -134,4 +105,22 @@ Usage: %.1f%%`,
 	)
 	fmt.Println("end PrintDiskUsage")
 	return result, nil
+}
+
+// Вспомогательная функция для форматирования байтов
+func FormatBytes(bytes int64) string {
+	if bytes == 0 {
+		return "0 B"
+	}
+
+	sizes := []string{"B", "KB", "MB", "GB", "TB"}
+	i := 0
+	size := float64(bytes)
+
+	for size >= 1024 && i < len(sizes)-1 {
+		size /= 1024
+		i++
+	}
+
+	return fmt.Sprintf("%.1f %s", size, sizes[i])
 }

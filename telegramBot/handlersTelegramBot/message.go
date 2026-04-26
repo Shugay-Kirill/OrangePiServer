@@ -8,15 +8,17 @@ import (
 	"net/url"
 	"strconv"
 	"sync"
+	"time"
 
 	"telegramBot/config"
 	"telegramBot/models"
 )
 
 type MessageHandler struct {
-	Token  string
-	Config *config.Config
-	states sync.Map // ключ: chatID (int64), значение: *UserState
+	Token          string
+	Config         *config.Config
+	states         sync.Map // ключ: chatID (int64), значение: *UserState
+	uploadSessions sync.Map // ключ: chatID, значение: *UploadSession
 }
 
 type InputHandler func(text string) (response string, next InputHandler, err error)
@@ -24,6 +26,13 @@ type InputHandler func(text string) (response string, next InputHandler, err err
 // UserState хранит текущий обработчик для конкретного чата
 type UserState struct {
 	handler InputHandler
+}
+
+type UploadSession struct {
+	Path         string
+	LastFileTime time.Time
+	ThreadID     int
+	Step         int // 1 - ожидание пути, 2 - ожидание файлов
 }
 
 func NewMessageHandler(token string, config *config.Config) *MessageHandler {
@@ -41,6 +50,13 @@ func (h *MessageHandler) HandleUpdate(update models.Update) {
 
 	message := update.Message
 
+	chatID := update.Message.Chat.ID
+
+	// Если есть активная сессия загрузки, направляем в HandleUploadFile
+	if _, ok := h.uploadSessions.Load(chatID); ok {
+		h.HandleUploadFile(update)
+		return
+	}
 	log.Printf("📩 Получено сообщение:")
 	log.Printf("   	👤 От: %s (@%s)", message.From.FirstName, message.From.Username)
 	log.Printf("   	🆔 Chat ID: %d", message.Chat.ID)
@@ -98,6 +114,8 @@ func (h *MessageHandler) HandleTextMessage(update models.Update) {
 		h.HandleDeleteDirectory(update)
 	case "/contentsDir":
 		h.HandleContentsDirectory(update)
+	case "/uploadFile":
+		h.HandleUploadFile(update)
 	default:
 	}
 }

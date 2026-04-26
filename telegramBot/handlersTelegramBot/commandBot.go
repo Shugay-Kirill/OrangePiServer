@@ -1,9 +1,13 @@
 package handlersTelegramBot
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"strings"
+	"time"
 
 	"telegramBot/models"
 	"telegramBot/yandexapi"
@@ -142,9 +146,9 @@ func (h *MessageHandler) HandleInfoDiskCommand(update models.Update) {
 func (h *MessageHandler) HandleCreateDirectory(update models.Update) {
 	message := update.Message
 	chatID := message.Chat.ID
-	thredID := message.MessageThreadID
+	threadID := message.MessageThreadID
 
-	h.SendMessage(chatID, thredID, "📁 Введите путь для создания директории (например, /photos):")
+	h.SendMessage(chatID, threadID, "📁 Введите путь для создания директории (например, /photos):")
 	step1 := func(text string) (string, InputHandler, error) {
 		path := text
 		print("step1. text %s", path)
@@ -166,9 +170,9 @@ func (h *MessageHandler) HandleCreateDirectory(update models.Update) {
 func (h *MessageHandler) HandleDeleteDirectory(update models.Update) {
 	message := update.Message
 	chatID := message.Chat.ID
-	thredID := message.MessageThreadID
+	threadID := message.MessageThreadID
 
-	h.SendMessage(chatID, thredID, "📁 Введите путь для удаления директории (например, /photos):")
+	h.SendMessage(chatID, threadID, "📁 Введите путь для удаления директории (например, /photos):")
 	step1 := func(text string) (string, InputHandler, error) {
 		path := text
 		print("step1. text %s", path)
@@ -190,9 +194,9 @@ func (h *MessageHandler) HandleDeleteDirectory(update models.Update) {
 func (h *MessageHandler) HandleContentsDirectory(update models.Update) {
 	message := update.Message
 	chatID := message.Chat.ID
-	thredID := message.MessageThreadID
+	threadID := message.MessageThreadID
 
-	h.SendMessage(chatID, thredID, "📁 Введите путь для просмотра содержимого директории (например, /photos):")
+	h.SendMessage(chatID, threadID, "📁 Введите путь для просмотра содержимого директории (например, /photos):")
 	step1 := func(text string) (string, InputHandler, error) {
 		path := text
 		print("step1. text %s", path)
@@ -220,9 +224,152 @@ func (h *MessageHandler) HandleContentsDirectory(update models.Update) {
 
 		fmt.Fprintf(&builder, (strings.Repeat("─", 20)))
 		fmt.Fprintf(&builder, "\nTotal items: %d\n", len(files))
-		h.SendMessage(chatID, thredID, builder.String())
+		h.SendMessage(chatID, threadID, builder.String())
 
 		return "", nil, nil
 	}
 	h.states.Store(chatID, &UserState{handler: step1})
+}
+
+func (h *MessageHandler) HandleUploadFile(update models.Update) {
+	message := update.Message
+	chatID := message.Chat.ID
+	threadID := message.MessageThreadID
+
+	// Проверяем, есть ли активная сессия для этого чата
+	sessionI, ok := h.uploadSessions.Load(chatID)
+	if !ok {
+		// Нет сессии - начинаем новую (команда /upload)
+		session := &UploadSession{
+			Step:     1,
+			ThreadID: threadID,
+		}
+		h.uploadSessions.Store(chatID, session)
+		h.SendMessage(chatID, threadID, "📁 Введите путь директории для загрузки (например, /photos):")
+		return
+	}
+
+	// Есть сессия - обрабатываем ввод
+	session := sessionI.(*UploadSession)
+
+	// Шаг 1: ожидание пути
+	if session.Step == 1 {
+		path := message.Text
+		if path == "" {
+			h.SendMessage(chatID, threadID, "Путь не может быть пустым. Попробуйте снова.")
+			return
+		}
+		session.Path = path
+		session.Step = 2
+		session.LastFileTime = time.Now()
+		h.uploadSessions.Store(chatID, session)
+		h.SendMessage(chatID, threadID, "📤 Ожидаю файлы для загрузки. Таймер 60 секунд будет сбрасываться при каждом файле.\nОтправьте /cancel для отмены.")
+		return
+	}
+
+	// Шаг 2: ожидание файлов
+	// Проверка таймаута
+	if time.Since(session.LastFileTime) > 60*time.Second {
+		h.uploadSessions.Delete(chatID)
+		h.SendMessage(chatID, threadID, "⏰ Время ожидания истекло. Загрузка завершена.")
+		return
+	}
+
+	// Проверка отмены
+	if message.Text == "cancel" || message.Text == "/cancel" || message.Text == "отмена" {
+		h.uploadSessions.Delete(chatID)
+		h.SendMessage(chatID, threadID, "❌ Загрузка отменена.")
+		return
+	}
+
+	// Определяем, есть ли файл
+	var fileID, fileName string
+	if message.Document.FileID != "" {
+		fileID = message.Document.FileID
+		fileName = message.Document.FileName
+	} else if len(message.Photo) > 0 {
+		// Берём самое большое фото
+		photo := message.Photo[len(message.Photo)-1]
+		fileID = photo.FileID
+		fileName = fmt.Sprintf("photo_%d.jpg", time.Now().Unix())
+	} else {
+		// Не файл – напоминаем
+		h.SendMessage(chatID, threadID, "⏳ Ожидаю файлы. Чтобы отменить, отправьте /cancel")
+		return
+	}
+
+	// Скачиваем файл
+	fileData, err := h.downloadTelegramFile(fileID)
+	if err != nil {
+		h.SendMessage(chatID, threadID, fmt.Sprintf("❌ Ошибка скачивания файла: %v", err))
+		return
+	}
+
+	// Обновляем время
+	session.LastFileTime = time.Now()
+	h.uploadSessions.Store(chatID, session)
+
+	// Загружаем на Яндекс.Диск
+	err = yandexapi.UploadFile(session.Path, fileName, fileData)
+	if err != nil {
+		h.SendMessage(chatID, threadID, fmt.Sprintf("❌ Ошибка загрузки на Яндекс.Диск: %v", err))
+		return
+	}
+
+	h.SendMessage(chatID, threadID, fmt.Sprintf("✅ Файл «%s» загружен в %s", fileName, session.Path))
+}
+
+// downloadTelegramFile скачивает файл по fileID и возвращает его содержимое
+func (h *MessageHandler) downloadTelegramFile(fileID string) ([]byte, error) {
+	// Получаем путь к файлу на серверах Telegram
+	filePath, err := h.getTelegramFilePath(fileID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Формируем URL для скачивания
+	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", h.Token, filePath)
+
+	// Скачиваем файл
+	resp, err := http.Get(fileURL)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка HTTP-запроса: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP ошибка: %s", resp.Status)
+	}
+
+	// Читаем всё содержимое
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
+	}
+
+	return data, nil
+}
+
+// getTelegramFilePath запрашивает путь к файлу по file_id
+func (h *MessageHandler) getTelegramFilePath(fileID string) (string, error) {
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/getFile?file_id=%s", h.Token, fileID)
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			FilePath string `json:"file_path"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	if !result.OK {
+		return "", fmt.Errorf("telegram API error")
+	}
+	return result.Result.FilePath, nil
 }
